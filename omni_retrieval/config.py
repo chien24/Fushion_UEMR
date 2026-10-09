@@ -55,6 +55,8 @@ class Config:
 
     # name -> JSON path (video_id -> [[ts, te], ...]); merged into the partition set.
     extra_partitions: dict = field(default_factory=dict)
+    # Built-in partitions to encode. Event retrieval (one vector per GT event) = ("gt",).
+    base_partitions: tuple = BASE_PARTITIONS
 
     # ----------------------------------------------------------------------
     @classmethod
@@ -124,4 +126,4 @@ class Config:
         return self.tag_dir / "raw" / "text"
 
     def partition_names(self) -> list[str]:
-        return list(BASE_PARTITIONS) + [n for n in self.extra_partitions if n not in BASE_PARTITIONS]
+        return list(self.base_partitions) + [n for n in self.extra_partitions if n not in self.base_partitions]

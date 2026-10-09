@@ -73,6 +73,32 @@ def caption_table(events: dict[str, list[dict]], subset: list[dict]) -> list[dic
     return out
 
 
+def event_table(events: dict[str, list[dict]], subset: list[dict]) -> list[dict]:
+    """The event database: one row per distinct GT event of every subset video.
+
+    Same clamp/rounding as the ``gt`` partition, so ``seg_key`` matches the encoder's
+    store and each caption's ``gt_seg_key``. An event carries every caption written for
+    it (val or dev) -- normally one; identical windows are merged.
+    """
+    meta = {r["video_id"]: r for r in subset}
+    out: dict[str, dict] = {}
+    for split in ("val", "dev"):
+        for r in events[split]:
+            v = video_id(r)
+            if v not in meta:
+                continue
+            seg = clamp([[float(r["timestamps"][0]), float(r["timestamps"][1])]], meta[v]["duration"])
+            if not seg:
+                continue
+            key = seg_key(v, *seg[0])
+            row = out.setdefault(key, {"seg_key": key, "video_id": v, "ts": round(seg[0][0], 2),
+                                       "te": round(seg[0][1], 2), "split": split,
+                                       "captions": [], "caption_ids": []})
+            row["captions"].append(r["text"])
+            row["caption_ids"].append(r["id"])
+    return sorted(out.values(), key=lambda e: (e["video_id"], e["ts"], e["te"]))
+
+
 # --------------------------------------------------------------------------- #
 # Store: what the encoder has already written                                 #
 # --------------------------------------------------------------------------- #
@@ -135,10 +161,11 @@ def prepare(cfg: Config, write: bool = True, verbose: bool = True) -> dict:
     """Subset -> partitions -> segment table -> todo lists. Safe to rerun."""
     subset = build_subset(cfg, write=write)
     events = load_events(cfg.meta_dir)
-    parts = build_all(subset, events, cfg.extra_partitions)
+    parts = build_all(subset, events, cfg.extra_partitions, cfg.base_partitions)
     rows = segment_table(parts)
     segments = unique_segments(rows)
     captions = caption_table(events, subset)
+    event_rows = event_table(events, subset)
 
     done_av = store_keys(cfg.av_store, "av")
     done_text = store_keys(cfg.text_store, "text")
@@ -158,9 +185,11 @@ def prepare(cfg: Config, write: bool = True, verbose: bool = True) -> dict:
                   f"{s['median len (s)']:>16}")
         print(f"segment rows: {len(rows)} | unique clips after dedup: {len(segments)} "
               f"| already encoded: {len(segments) - len(segs_todo)} | to encode: {len(segs_todo)}")
-        print(f"captions (queries): {len(captions)} | to encode: {len(caps_todo)}")
+        print(f"GT events (database rows): {len(event_rows)} | captions (queries): {len(captions)} "
+              f"| captions to encode: {len(caps_todo)}")
     return {"subset": subset, "parts": parts, "rows": rows, "segments": segments,
-            "captions": captions, "segs_todo": segs_todo, "caps_todo": caps_todo}
+            "captions": captions, "event_rows": event_rows,
+            "segs_todo": segs_todo, "caps_todo": caps_todo}
 
 
 def main(argv=None) -> int:

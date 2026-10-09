@@ -115,6 +115,70 @@ def save_csv(rows: list[dict], path) -> None:
 # Sanity check                                                                #
 # --------------------------------------------------------------------------- #
 
+def _gt_clips(cache_dir) -> tuple[np.ndarray, np.ndarray]:
+    """``(seg_key, emb)`` of the GT event clips: ``events.npz``, else the ``gt`` rows of ``segments.npz``."""
+    cache_dir = Path(cache_dir)
+    if (cache_dir / "events.npz").is_file():
+        with np.load(cache_dir / "events.npz") as blob:
+            return blob["seg_key"], blob["emb"].astype(np.float32)
+    with np.load(cache_dir / "segments.npz") as blob:
+        sel = blob["partition"] == "gt"
+        return blob["seg_key"][sel], blob["emb"][sel].astype(np.float32)
+
+
+def evaluate_events(cache_dir, block: int = QUERY_BLOCK) -> tuple[dict, list[dict]]:
+    """Single-event retrieval: each val caption searches every GT event in ``events.npz``.
+
+    Correct = the caption's own event (same video *and* same window). Also reported:
+    ``video@k`` (an event of the right video in the top k, any window) and
+    ``tIoU.5@1`` (top-1 is the right video and overlaps the GT event by tIoU >= 0.5).
+    Returns ``(summary, per_query)``; ``per_query`` has the top-1 answer of every caption.
+    """
+    from .search import EventIndex
+
+    index = EventIndex.load(cache_dir)
+    text = load_text(cache_dir)
+    pos = np.array([index.row_of.get(k, -1) for k in text["gt_seg_key"]])
+    if (pos < 0).any():
+        raise SanityCheckFailed(f"{int((pos < 0).sum())} captions have no event in events.npz")
+
+    n = len(pos)
+    ranks = np.empty(n, dtype=np.int64)
+    top5 = np.empty((n, min(5, len(index))), dtype=np.int64)
+    best = np.empty(n, dtype=np.float32)
+    for s in range(0, n, block):
+        blk = slice(s, s + block)
+        sim = index.scores(text["emb"][blk])                                  # [b, N]
+        q = np.arange(sim.shape[0])
+        ranks[blk] = 1 + (sim > sim[q, pos[blk]][:, None]).sum(1)
+        part = np.argpartition(-sim, top5.shape[1] - 1, axis=1)[:, :top5.shape[1]]
+        order = np.argsort(-np.take_along_axis(sim, part, 1), axis=1, kind="stable")
+        top5[blk] = np.take_along_axis(part, order, 1)
+        best[blk] = sim[q, top5[blk][:, 0]]
+
+    top1 = top5[:, 0]
+    right_video = index.video_id[top5] == text["video_id"][:, None]            # [n, 5]
+    overlap = tiou_vec(index.ts[top1], index.te[top1], text["gt_ts"], text["gt_te"])
+    summary = {
+        **{f"event {k}": v for k, v in rank_metrics(ranks).items()},
+        "event MRR": 100 * float(np.mean(1 / ranks)),
+        "video@1": 100 * float(right_video[:, 0].mean()),
+        "video@5": 100 * float(right_video.any(1).mean()),
+        "tIoU.5@1": 100 * float((right_video[:, 0] & (overlap >= 0.5)).mean()),
+        "queries": n, "events": len(index), "videos": len(set(index.video_id.tolist())),
+    }
+    per_query = [{
+        "caption_id": str(text["caption_id"][i]), "query": str(text["sentence"][i]),
+        "video_id": str(text["video_id"][i]),
+        "gt": f"[{text['gt_ts'][i]:.1f}, {text['gt_te'][i]:.1f}]",
+        "rank": int(ranks[i]), "correct": bool(ranks[i] == 1),
+        "top1_video": str(index.video_id[top1[i]]),
+        "top1": f"[{index.ts[top1[i]]:.1f}, {index.te[top1[i]]:.1f}]",
+        "top1_caption": str(index.caption[top1[i]]), "top1_score": round(float(best[i]), 4),
+    } for i in range(n)]
+    return summary, per_query
+
+
 def text_to_clip(cache_dir) -> dict:
     """Text -> clip on the ``gt`` segments, two galleries.
 
@@ -123,9 +187,7 @@ def text_to_clip(cache_dir) -> dict:
       scores. On the full val subset it is the same 3030 x 3030 problem.
     """
     text = load_text(cache_dir)
-    with np.load(Path(cache_dir) / "segments.npz") as blob:
-        sel = blob["partition"] == "gt"
-        keys, emb = blob["seg_key"][sel], blob["emb"][sel].astype(np.float32)
+    keys, emb = _gt_clips(cache_dir)
     uniq, first = np.unique(keys, return_index=True)
     row_of = {k: i for i, k in enumerate(uniq)}
     G = emb[first]

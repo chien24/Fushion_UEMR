@@ -112,6 +112,52 @@ class SegmentIndex:
         return hits
 
 
+class EventIndex:
+    """Single-event retrieval: one vector per GT event, the answer is an event.
+
+        index = EventIndex.load(cache_dir)                 # reads events.npz
+        hits  = index.search(q_vec, top_k=5)
+        # [{rank, score, video_id, ts, te, caption, seg_key}, ...]
+
+    Score = cosine(query, event). No grouping by video: two events of the same video
+    are two separate results.
+    """
+
+    def __init__(self, emb, seg_key, video_id, ts, te, caption, split=None):
+        self.emb = np.asarray(emb, dtype=np.float32)
+        self.seg_key = np.asarray(seg_key)
+        self.video_id = np.asarray(video_id)
+        self.ts = np.asarray(ts, dtype=np.float32)
+        self.te = np.asarray(te, dtype=np.float32)
+        self.caption = np.asarray(caption)
+        self.split = np.asarray(split) if split is not None else np.full(len(self.emb), "")
+        self.row_of = {k: i for i, k in enumerate(self.seg_key)}
+
+    @classmethod
+    def load(cls, cache_dir) -> "EventIndex":
+        with np.load(Path(cache_dir) / "events.npz") as b:
+            return cls(b["emb"], b["seg_key"], b["video_id"], b["ts"], b["te"], b["caption"],
+                       b["split"] if "split" in b.files else None)
+
+    def __len__(self) -> int:
+        return len(self.emb)
+
+    def scores(self, q: np.ndarray) -> np.ndarray:
+        """Cosine of every query against every event, ``[Q, N]``."""
+        q = np.atleast_2d(np.asarray(q, dtype=np.float32))
+        q = q / np.clip(np.linalg.norm(q, axis=1, keepdims=True), 1e-12, None)
+        return q @ self.emb.T
+
+    def search(self, q_vec: np.ndarray, top_k: int = 5) -> list[dict]:
+        s = self.scores(q_vec)[0]
+        k = min(top_k, len(s))
+        top = np.argpartition(-s, k - 1)[:k]
+        top = top[np.argsort(-s[top], kind="stable")]
+        return [{"rank": r + 1, "score": float(s[i]), "video_id": str(self.video_id[i]),
+                 "ts": float(self.ts[i]), "te": float(self.te[i]), "caption": str(self.caption[i]),
+                 "seg_key": str(self.seg_key[i])} for r, i in enumerate(top)]
+
+
 def tiou(a: tuple[float, float], b: tuple[float, float]) -> float:
     inter = max(0.0, min(a[1], b[1]) - max(a[0], b[0]))
     union = max(a[1], b[1]) - min(a[0], b[0])

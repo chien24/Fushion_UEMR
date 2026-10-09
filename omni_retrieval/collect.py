@@ -79,6 +79,32 @@ def collect_segments(rows: list[dict], av_store, out_path, allow_missing: bool =
     return {"rows": len(kept), "unique": len({r["seg_key"] for r in kept}), "missing": len(missing)}
 
 
+def collect_events(event_rows: list[dict], av_store, out_path, allow_missing: bool = False) -> dict:
+    """The event database ``events.npz``: one row per GT event.
+
+    Arrays: seg_key, video_id, ts, te, split (val/dev), caption (all captions of the
+    event joined with `` | ``), caption_id (same), emb (fp16, L2-normalised).
+    """
+    wanted = {e["seg_key"]: [i] for i, e in enumerate(event_rows)}
+    emb, found = _gather(av_store, "av", wanted, len(event_rows))
+    missing = [e["seg_key"] for e in event_rows if e["seg_key"] not in found]
+    if missing and not allow_missing:
+        raise MissingEmbeddings(f"{len(missing)} events have no embedding in {av_store} "
+                                f"(first: {missing[:3]}). Run the av encode cell again.")
+    keep = np.array([e["seg_key"] in found for e in event_rows], dtype=bool)
+    kept = [e for e, k in zip(event_rows, keep) if k]
+    _save_npz(Path(out_path),
+              seg_key=np.array([e["seg_key"] for e in kept]),
+              video_id=np.array([e["video_id"] for e in kept]),
+              ts=np.array([e["ts"] for e in kept], dtype=np.float32),
+              te=np.array([e["te"] for e in kept], dtype=np.float32),
+              split=np.array([e["split"] for e in kept]),
+              caption=np.array([" | ".join(e["captions"]) for e in kept]),
+              caption_id=np.array([" | ".join(e["caption_ids"]) for e in kept]),
+              emb=emb[keep] if not keep.all() else emb)
+    return {"events": len(kept), "videos": len({e["video_id"] for e in kept}), "missing": len(missing)}
+
+
 def collect_text(captions: list[dict], text_store, out_path, allow_missing: bool = False) -> dict:
     wanted = {c["caption_id"]: [i] for i, c in enumerate(captions)}
     emb, found = _gather(text_store, "text", wanted, len(captions))
@@ -112,11 +138,15 @@ def _read_lines(path) -> list[dict]:
 
 
 def collect(cfg, prepared: dict, allow_missing: bool = False) -> dict:
-    """Write segments.npz / text.npz / meta.json into ``cfg.out_dir``.
+    """Write events.npz / segments.npz / text.npz / meta.json into ``cfg.out_dir``.
 
     ``prepared`` is the dict ``manifest.prepare`` returns (rows, captions, subset, ...).
+    ``events.npz`` (one row per GT event, with captions) is the database the event
+    retrieval demo searches; ``segments.npz`` is the per-partition view for the
+    multi-vector experiments.
     """
     out = Path(cfg.out_dir)
+    evt = collect_events(prepared["event_rows"], cfg.av_store, out / "events.npz", allow_missing)
     seg = collect_segments(prepared["rows"], cfg.av_store, out / "segments.npz", allow_missing)
     txt = collect_text(prepared["captions"], cfg.text_store, out / "text.npz", allow_missing)
     enc = _read_json(Path(cfg.av_store) / "encoder_meta.json") or {}
@@ -130,12 +160,12 @@ def collect(cfg, prepared: dict, allow_missing: bool = False) -> dict:
                         for m, s in (("av", cfg.av_store), ("text", cfg.text_store))},
         "partitions": {name: sum(len(s) for s in segs.values()) for name, segs in prepared["parts"].items()},
         "extra_partitions": cfg.extra_partitions,
-        "segments": seg, "text": txt,
+        "events": evt, "segments": seg, "text": txt,
         "n_videos": len(prepared["subset"]),
         "videos": prepared["subset"],
         "settings": {"n_videos": cfg.n_videos, "seed": cfg.seed, "smoke": cfg.smoke},
         "collected_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     (out / "meta.json").write_text(json.dumps(meta, indent=1, ensure_ascii=False), encoding="utf-8")
-    print(f"[collect] segments: {seg} | text: {txt} -> {out}")
+    print(f"[collect] events: {evt} | segments: {seg} | text: {txt} -> {out}")
     return meta

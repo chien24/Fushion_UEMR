@@ -54,16 +54,26 @@ def gt_segments(events: dict[str, list[dict]], videos: set[str]) -> dict[str, li
     return out
 
 
-def build_base(subset: list[dict], events: dict[str, list[dict]]) -> dict[str, dict]:
-    """``global``, ``gt`` and ``uni_M_gt`` for every video of the subset."""
+def build_base(subset: list[dict], events: dict[str, list[dict]],
+               names=BASE_PARTITIONS) -> dict[str, dict]:
+    """The built-in partitions in ``names`` (``global``, ``gt``, ``uni_M_gt``) for every video.
+
+    Event retrieval (one vector per GT event) only needs ``names=("gt",)``.
+    """
+    unknown = set(names) - set(BASE_PARTITIONS)
+    if unknown:
+        raise ValueError(f"unknown built-in partitions {sorted(unknown)}; have {BASE_PARTITIONS}")
     durations = {r["video_id"]: r["duration"] for r in subset}
     gt = gt_segments(events, set(durations))
-    parts = {name: {} for name in BASE_PARTITIONS}
+    parts = {name: {} for name in names}
     for v, dur in durations.items():
-        parts["global"][v] = clamp([[0.0, dur]], dur)
-        parts["gt"][v] = clamp(gt.get(v, []), dur)
-        m = len(parts["gt"][v])
-        parts["uni_M_gt"][v] = clamp(uniform(dur, m), dur) if m else []
+        gt_v = clamp(gt.get(v, []), dur)
+        if "global" in parts:
+            parts["global"][v] = clamp([[0.0, dur]], dur)
+        if "gt" in parts:
+            parts["gt"][v] = gt_v
+        if "uni_M_gt" in parts:
+            parts["uni_M_gt"][v] = clamp(uniform(dur, len(gt_v)), dur) if gt_v else []
     return parts
 
 
@@ -85,8 +95,9 @@ def load_partition_file(path, durations: dict[str, float]) -> dict[str, list[lis
     return out
 
 
-def build_all(subset: list[dict], events: dict[str, list[dict]], extra: dict | None = None) -> dict[str, dict]:
-    parts = build_base(subset, events)
+def build_all(subset: list[dict], events: dict[str, list[dict]], extra: dict | None = None,
+              base=BASE_PARTITIONS) -> dict[str, dict]:
+    parts = build_base(subset, events, base)
     durations = {r["video_id"]: r["duration"] for r in subset}
     for name, path in (extra or {}).items():
         parts[name] = load_partition_file(path, durations)

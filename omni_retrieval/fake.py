@@ -14,8 +14,8 @@ from pathlib import Path
 
 import numpy as np
 
-from .collect import collect_segments, collect_text
-from .evaluate import evaluate, markdown, text_to_clip
+from .collect import collect_events, collect_segments, collect_text
+from .evaluate import evaluate, evaluate_events, markdown, text_to_clip
 
 
 def _vec(key: str, dim: int) -> np.ndarray:
@@ -37,14 +37,20 @@ def write_fake_stores(prepared: dict, out_dir, dim: int = 64, noise: float = 0.3
 def run_fake_pipeline(prepared: dict, out_dir, dim: int = 64) -> list[dict]:
     av_store, text_store = write_fake_stores(prepared, out_dir, dim)
     cache = Path(out_dir) / "cache"
+    print("[fake] events  :", collect_events(prepared["event_rows"], av_store, cache / "events.npz"))
     print("[fake] segments:", collect_segments(prepared["rows"], av_store, cache / "segments.npz"))
     print("[fake] text    :", collect_text(prepared["captions"], text_store, cache / "text.npz"))
+    summary, _ = evaluate_events(cache)
+    print("[fake] event retrieval:", {k: round(v, 2) if isinstance(v, float) else v for k, v in summary.items()})
+    assert summary["event R@1"] > 95, "fake event R@1 should be ~100: caption <-> event mapping is broken"
     clip = text_to_clip(cache)
     print(f"[fake] text->clip R@1: eval gallery {clip['eval']['R@1']:.1f} | subset gallery {clip['subset']['R@1']:.1f}")
-    rows = evaluate(cache)
+    rows = evaluate(cache, [p for p in ("global", "event_single", "uni_M_gt", "gt")
+                            if p == "event_single" or p in prepared["parts"]])
     print(markdown(rows))
     by = {r["partition"]: r for r in rows}
     assert clip["eval"]["R@1"] > 95, "fake text->clip should be ~100: caption <-> gt clip mapping is broken"
-    assert by["gt"]["R@1"] > by["global"]["R@1"], "fake gt should beat global"
+    if "global" in by:
+        assert by["gt"]["R@1"] > by["global"]["R@1"], "fake gt should beat global"
     print("[fake] OK")
     return rows

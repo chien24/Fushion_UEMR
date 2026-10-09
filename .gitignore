@@ -17,3 +17,5 @@ tmp/
 *.safetensors
 *.bin
 *.mp4
+
+notebooks/

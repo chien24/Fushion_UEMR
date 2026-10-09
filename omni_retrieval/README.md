@@ -18,6 +18,18 @@ The layout follows `Code/Omni/colab/Omni_inference_uemr.ipynb`: Omni-fix (branch
 
 If the session drops, run cells 1–5, then 11, then the encode cell again. Only the missing clips get encoded.
 
+## Event retrieval (what the notebook does now)
+
+YouCook2 videos hold many events while Omni encodes one clip, so the unit stored and returned is **one GT event**:
+
+- **Build** (once, GPU, `base_partitions=("gt",)`): every GT event of the ~500 gallery videos is encoded as a `[ts, te]` clip, giving `events.npz` (`seg_key`, `video_id`, `ts`, `te`, `caption`, `split`, `emb`). The val captions are encoded into `text.npz` as the evaluation queries.
+- **Evaluate** (`evaluate.evaluate_events`): each val caption searches all events.
+  - `event R@k` counts a hit only on the caption's own event (right video and right window).
+  - `video@k` counts any event of the right video.
+  - `tIoU.5@1` counts a top-1 in the right video that overlaps the GT event by at least 0.5.
+  - The per-query top-1 answers are saved to `per_query.csv`.
+- **Query** (`search.EventIndex`): `EventIndex.load(db).search(q_vec, top_k)` returns `[{rank, score, video_id, ts, te, caption, seg_key}]`. A free-text query is encoded with `encode.encode_texts` after a single `encode.load_model`. That step needs Omni-fix, because the model code lives there; the search itself is plain numpy.
+
 ## Why not `omniretriever.cli extract`
 
 The fine-tuned adapter was scored with `scripts/eval_youcookii.py`. That script runs the training pipeline (`LazySupervisedDataset`), which does the following:

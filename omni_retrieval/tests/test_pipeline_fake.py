@@ -9,11 +9,12 @@ import json
 import numpy as np
 import pytest
 
-from omni_retrieval.collect import MissingEmbeddings, collect_segments, collect_text
-from omni_retrieval.evaluate import evaluate, sanity_check, text_to_clip
-from omni_retrieval.manifest import (caption_table, segment_records, segment_table, store_keys,
-                                     unique_segments)
+from omni_retrieval.collect import MissingEmbeddings, collect_events, collect_segments, collect_text
+from omni_retrieval.evaluate import evaluate, evaluate_events, sanity_check, text_to_clip
+from omni_retrieval.manifest import (caption_table, event_table, segment_records, segment_table,
+                                     store_keys, unique_segments)
 from omni_retrieval.partitions import build_base
+from omni_retrieval.search import EventIndex
 
 
 def _events():
@@ -40,7 +41,7 @@ def prepared():
     parts = build_base(SUBSET, events)
     rows = segment_table(parts)
     return {"events": events, "parts": parts, "rows": rows, "segments": unique_segments(rows),
-            "captions": caption_table(events, SUBSET)}
+            "captions": caption_table(events, SUBSET), "event_rows": event_table(events, SUBSET)}
 
 
 def test_tables(prepared):
@@ -123,6 +124,60 @@ def test_sanity_reference(prepared, tmp_path):
     ref.write_text(json.dumps({"text_to_multimodal (t2m)": {"R@1": 40.0}, "num_samples": 4}))
     with pytest.raises(RuntimeError, match="SANITY CHECK FAILED"):
         sanity_check(out, ref)
+
+
+def test_gt_only_partition():
+    parts = build_base(SUBSET, _events(), names=("gt",))
+    assert set(parts) == {"gt"} and parts["gt"]["vidD"] == [[0.0, 8.0]]
+
+
+def test_event_table(prepared):
+    ev = prepared["event_rows"]
+    assert [e["seg_key"] for e in ev] == ["vidA__0.00_10.00", "vidA__12.00_20.00", "vidB__5.00_15.00",
+                                          "vidB__15.00_30.00", "vidD__0.00_8.00"]
+    assert ev[1]["captions"] == ["fry onion"] and ev[1]["caption_ids"] == ["vidA_1"]
+    assert ev[4]["split"] == "dev" and ev[4]["captions"] == ["whisk eggs"]
+    # every query's own event is in the database
+    assert {c["gt_seg_key"] for c in prepared["captions"]} <= {e["seg_key"] for e in ev}
+
+
+def test_event_database_and_search(prepared, tmp_path):
+    av_store, text_store = _write_store(prepared, tmp_path, "chunks")
+    out = tmp_path / "cache"
+    assert collect_events(prepared["event_rows"], av_store, out / "events.npz") == \
+        {"events": 5, "videos": 3, "missing": 0}
+    collect_text(prepared["captions"], text_store, out / "text.npz")
+
+    index = EventIndex.load(out)
+    hits = index.search(_fake_vec("vidA__12.00_20.00"), top_k=2)
+    assert hits[0]["seg_key"] == "vidA__12.00_20.00" and hits[0]["rank"] == 1
+    assert (hits[0]["video_id"], hits[0]["ts"], hits[0]["te"]) == ("vidA", 12.0, 20.0)
+    assert hits[0]["caption"] == "fry onion" and hits[0]["score"] == pytest.approx(1.0, abs=1e-3)
+
+    summary, per_query = evaluate_events(out)
+    assert summary["event R@1"] == 100 and summary["video@1"] == 100 and summary["tIoU.5@1"] == 100
+    assert summary["events"] == 5 and summary["queries"] == 4
+    assert all(q["correct"] for q in per_query)
+
+
+def test_event_metrics_hand_computed(prepared, tmp_path):
+    """Caption vidA_0 ("cut onion", GT [0,10]) is given the vector of vidA's OTHER event:
+    top-1 = right video, wrong event, no overlap -> event R@1 3/4, video@1 4/4, tIoU.5@1 3/4."""
+    av_store, _ = _write_store(prepared, tmp_path, "chunks")
+    text = {f"{c['caption_id']}__text": _fake_vec(c["gt_seg_key"]) for c in prepared["captions"]}
+    text["vidA_0__text"] = _fake_vec("vidA__12.00_20.00")
+    np.savez(tmp_path / "text_wrong.npz", **text)
+    out = tmp_path / "cache"
+    collect_events(prepared["event_rows"], av_store, out / "events.npz")
+    collect_text(prepared["captions"], tmp_path / "text_wrong.npz", out / "text.npz")
+
+    summary, per_query = evaluate_events(out)
+    assert summary["event R@1"] == pytest.approx(75.0)
+    assert summary["video@1"] == pytest.approx(100.0)
+    assert summary["tIoU.5@1"] == pytest.approx(75.0)
+    wrong = [q for q in per_query if not q["correct"]]
+    assert [q["caption_id"] for q in wrong] == ["vidA_0"]
+    assert wrong[0]["top1"] == "[12.0, 20.0]" and wrong[0]["top1_caption"] == "fry onion"
 
 
 def test_missing_ids_are_reported(prepared, tmp_path):
