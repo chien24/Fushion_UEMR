@@ -23,7 +23,7 @@ Colab session loses at most one chunk. Records that fail to load are logged to
 dataset does when ``run_test`` is off.
 
     python -m omni_retrieval.encode --modality av --manifest segs_todo.jsonl --store raw/av \\
-        --omni-repo /content/code/Omni-fix --base-model .../WAVE-7B --beats-path .../BEATs.pt \\
+        --omni-repo /content/Omni-fix --base-model .../WAVE-7B --beats-path .../BEATs.pt \\
         --adapter .../best --video-root /content/videos
 """
 

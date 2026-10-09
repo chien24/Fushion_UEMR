@@ -6,16 +6,17 @@ Everything runs on **Colab** through `notebooks/omni_retrieval_colab.ipynb`. Not
 
 ## Running on Colab
 
-1. Get the code to Colab, either way:
-   - **drive:** upload the whole `Code/Fushion` folder to `MyDrive/uemr/code/Fushion`.
-   - **git:** push Fushion to GitHub and set `CODE_SOURCE = 'git'` and `FUSHION_GIT` in cell 2.
-2. Run cells 1–4 (setup) and then cells 5–7 (unit test, dry-run, fake npz). Cells 5–7 don't need a GPU.
-3. With `SMOKE = True`, run cells 8–15. This encodes 5 videos for real, about 100 clips.
-4. Set `SMOKE = False`, run cell 4, then cells 8–15 again. The smoke embeddings are reused.
-5. Optionally, set `TAG = 'pt'` and run again for column (a). The pretrained adapter uses the same manifest but its own cache folder.
-6. Cells 16–17 free memory and run interactive queries. In model-free mode the query is an existing caption; otherwise the model is loaded once.
+The layout follows `Code/Omni/colab/Omni_inference_uemr.ipynb`: Omni-fix (branch `chien`) is cloned to `/content/Omni-fix`, WAVE-7B goes to `/content/WAVE_HOME`, and the `best` checkpoint is copied to `/content/my_checkpoint` and checked for its fusion heads. The library install is the **training** notebook's (`transformers==4.51.3`), because that is the environment `eval_youcookii.py` ran in.
 
-If the session drops, run cells 1–4, then 10, then the encode cell again. Only the missing clips get encoded.
+1. Get the code to Colab with `CODE_SOURCE = 'git'` (default), which clones `https://github.com/chien24/Fushion_UEMR.git` to `/content/Fushion_UEMR`. Alternatively, use `'drive'` to copy from `MyDrive/uemr/code/Fushion`.
+2. Run cells 1–5 for setup: code, libraries, WAVE-7B plus the checkpoint, the fusion-head check, and the config.
+3. Run cells 6–8: unit test, dry-run, and the fake npz test. None of them need a GPU.
+4. With `SMOKE = True`, run cells 9–16. This encodes 5 videos for real, about 100 clips.
+5. Set `SMOKE = False`, run cell 5, then cells 9–16 again. The smoke embeddings are reused.
+6. Optionally, set `TAG = 'pt'` and run again for column (a). The pretrained adapter uses the same manifest but its own cache folder.
+7. Cells 17–18 free memory and run interactive queries. In model-free mode the query is an existing caption; otherwise the model is loaded once.
+
+If the session drops, run cells 1–5, then 11, then the encode cell again. Only the missing clips get encoded.
 
 ## Why not `omniretriever.cli extract`
 
@@ -51,8 +52,8 @@ Durations come from the mp4 header (the shorter of the video and audio streams).
 To add a partition, for example Athena proposals (`uniav_pred`), `uni_M`, `rand_M` or `kmedoids_M`:
 
 1. Write a JSON file `{"<video_id>": [[ts, te], ...], ...}`. Extra fields after `te`, such as a confidence, are ignored.
-2. In cell 4: `EXTRA_PARTITIONS = {'uniav_pred': '/content/drive/MyDrive/uemr/partitions/uniav_pred.json'}`.
-3. Run cells 10, 12, 14 and 15. Only segments that aren't in the cache yet get encoded. Dedup works on `(video, ts, te)` rounded to 0.01 s, so a proposal identical to a GT event or another partition's segment is reused.
+2. In cell 5: `EXTRA_PARTITIONS = {'uniav_pred': '/content/drive/MyDrive/uemr/partitions/uniav_pred.json'}`.
+3. Run cells 11, 13, 15 and 16. Only segments that aren't in the cache yet get encoded. Dedup works on `(video, ts, te)` rounded to 0.01 s, so a proposal identical to a GT event or another partition's segment is reused.
 
 ## Cache format (`/content/drive/MyDrive/uemr/omni_cache/`)
 

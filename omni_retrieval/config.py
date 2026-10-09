@@ -66,10 +66,10 @@ class Config:
             meta_dir=f"{drive_data}/metadata",
             video_src=f"{drive_data}/videos",
             video_root="/content/videos",
-            omni_repo="/content/code/Omni-fix",
+            omni_repo="/content/Omni-fix",
             wave_path="/content/WAVE_HOME/WAVE-7B",
             beats_path="/content/WAVE_HOME/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt",
-            adapter_ft=f"{run}/best",
+            adapter_ft="/content/my_checkpoint",          # copy of {run}/best
             adapter_pt="/content/adapters/omniretriever-7b",
             cache_root="/content/drive/MyDrive/uemr/omni_cache",
             ref_eval_json=f"{run}/eval/best_val.json",
