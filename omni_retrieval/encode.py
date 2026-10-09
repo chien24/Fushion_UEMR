@@ -34,6 +34,7 @@ import importlib.util
 import json
 import os
 import subprocess
+import tempfile
 import sys
 import time
 from pathlib import Path
@@ -283,7 +284,7 @@ def main(argv=None) -> int:
         os.environ["VIDEO_ROOT"] = a.video_root
     # LazySupervisedDataset appends one line per clip to $DATA_LOADING_LOG (default ./tmp/...);
     # keep it off Drive and out of the code checkout.
-    os.environ.setdefault("DATA_LOADING_LOG", "/tmp/omni_data_loading.log")
+    os.environ.setdefault("DATA_LOADING_LOG", os.path.join(tempfile.gettempdir(), "omni_data_loading.log"))
     store = Path(a.store)
     with open(a.manifest, encoding="utf-8") as f:
         records = [json.loads(line) for line in f if line.strip()]
