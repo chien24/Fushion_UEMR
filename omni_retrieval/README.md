@@ -41,6 +41,23 @@ YouCook2 videos hold many events while Omni encodes one clip, so the unit stored
 - **Query** (`search.EventIndex`): `EventIndex.load(db).search(q_vec, top_k)` returns `[{rank, score, video_id, ts, te, caption, seg_key}]`. A free-text query is encoded with `encode.encode_texts` after a single `encode.load_model(base, beats, adapter)`. That step needs the model, using the vendored code. The search itself is plain numpy.
 - **Hand-written queries** (`queries.evaluate_custom`): same metrics, computed by the shared `evaluate.score_event_queries`.
 
+## Error analysis and the "same meaning" metric (`analysis.py`, cell 16)
+
+`event R@k` accepts exactly one event, but YouCook2 repeats the same step ("add oil to a pan") in many videos. `analysis.run_analysis(cache_dir, caption_embedder(), out_dir=...)` reads `events.npz` / `text.npz` (no GPU, no Omni) and reports, for the GT and the custom queries:
+
+- **Same-meaning metrics:**
+  - `exact-caption@k`: some top-k event has a caption identical to the GT caption after normalisation.
+  - `sem@k (tau)`: some top-k event has a caption that means the same, i.e. cosine ≥ `tau` under an independent sentence encoder (`all-MiniLM-L6-v2`).
+  - The share of top-1 misses that are the same step in another video.
+- **Error breakdown:**
+  - The type of each top-1 result.
+  - R@k by GT event duration, by the number of same-meaning events in other videos, and by query length.
+  - Hub events, and hubness by event duration.
+  - The long tail (rank > 100).
+  - Judge calibration pairs.
+
+The judge reads only the annotations. It is used for scoring and takes no part in retrieval. Files are written to `omni_cache/<tag>/analysis/`.
+
 ## Why not `omniretriever.cli extract`
 
 The fine-tuned adapter was scored with `scripts/eval_youcookii.py`. That script runs the training pipeline (`LazySupervisedDataset`), which does the following:

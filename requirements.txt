@@ -16,6 +16,9 @@ librosa>=0.10.2
 soundfile>=0.12.1
 Pillow>=10.4.0
 
+# analysis only (notebook cell 16): independent caption judge for the "same meaning" metric
+sentence-transformers>=3.0.0
+
 numpy>=1.26.0
 einops>=0.8.0
 tqdm>=4.66.0
