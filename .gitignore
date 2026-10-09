@@ -1,0 +1,19 @@
+# Python bytecode / test cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Local scratch (e.g. Omni-fix's data_loading.log lands in ./tmp)
+tmp/
+
+# Embeddings and model files live on Drive, never in the repo
+*.npz
+*.npy
+*.pt
+*.pth
+*.safetensors
+*.bin
+*.mp4
