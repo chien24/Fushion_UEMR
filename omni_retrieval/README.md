@@ -6,17 +6,27 @@ Everything runs on **Colab** through `notebooks/omni_retrieval_colab.ipynb`. Not
 
 ## Running on Colab
 
-The layout follows `Code/Omni/colab/Omni_inference_uemr.ipynb`: Omni-fix (branch `chien`) is cloned to `/content/Omni-fix`, WAVE-7B goes to `/content/WAVE_HOME`, and the `best` checkpoint is copied to `/content/my_checkpoint` and checked for its fusion heads. The library install is the **training** notebook's (`transformers==4.51.3`), because that is the environment `eval_youcookii.py` ran in.
+No training happens anywhere here: the fine-tuned LoRA checkpoint is only loaded and run forward.
 
-1. Get the code to Colab with `CODE_SOURCE = 'git'` (default), which clones `https://github.com/chien24/Fushion_UEMR.git` to `/content/Fushion_UEMR`. Alternatively, use `'drive'` to copy from `MyDrive/uemr/code/Fushion`.
-2. Run cells 1–5 for setup: code, libraries, WAVE-7B plus the checkpoint, the fusion-head check, and the config.
-3. Run cells 6–8: unit test, dry-run, and the fake npz test. None of them need a GPU.
-4. With `SMOKE = True`, run cells 9–16. This encodes 5 videos for real, about 100 clips.
-5. Set `SMOKE = False`, run cell 5, then cells 9–16 again. The smoke embeddings are reused.
-6. Optionally, set `TAG = 'pt'` and run again for column (a). The pretrained adapter uses the same manifest but its own cache folder.
-7. Cells 17–18 free memory and run interactive queries. In model-free mode the query is an existing caption; otherwise the model is loaded once.
+**No Omni-fix clone is needed.** The model, processor and event-cutting code that encoding needs are copied verbatim into `third_party/omni_fix/` (see `VENDORED.md` there). WAVE-7B and BEATs are downloaded from HuggingFace to `/content/WAVE_HOME`. The `best` checkpoint is copied from Drive to `/content/my_checkpoint` and checked for its fusion heads. Libraries come from this repo's `requirements.txt` (`transformers==4.51.3`, the environment the checkpoint was evaluated in).
 
-If the session drops, run cells 1–5, then 11, then the encode cell again. Only the missing clips get encoded.
+1. Cells 1–5 set things up: clone `chien24/Fushion_UEMR`, install requirements, download WAVE-7B and copy the checkpoint, check the heads, configure.
+2. Cell 6 runs the unit tests (no GPU).
+3. With `SMOKE = True`, run cells 7–12. This encodes the GT events of 5 videos for real and evaluates them.
+4. Set `SMOKE = False`, run cell 5, then cells 7–13. Cell 13 evaluates the hand-written queries.
+5. Cells 14–15 free memory, then let you type queries.
+
+If the session drops, run cells 1–5, then 8, then the encode cell again. Only the missing events get encoded.
+
+## Queries and GT
+
+- **GT queries:** the 3,030 YouCook2 val captions. Each one's GT is its own event.
+- **Hand-written queries:** `queries/custom_queries.jsonl`, one per line, in the form `{"query", "video_id", "ts", "te"}` with optional extra fields such as `source_caption`.
+  - The `[ts, te]` GT window is mapped to the database event of the same video with the largest tIoU (at least 0.5). It doesn't have to match the YouCook2 segment exactly.
+  - Vectors are cached by query text, so editing a line re-encodes only that line.
+  - Queries whose video isn't in the database are listed as skipped.
+  - The shipped file has 26 paraphrases of val events, deliberately worded differently from the captions.
+- **Typed queries:** cell 15 accepts `query || video_id || ts || te`. With the GT part, the correct event in the result table is marked ✓.
 
 ## Event retrieval (what the notebook does now)
 
@@ -28,7 +38,8 @@ YouCook2 videos hold many events while Omni encodes one clip, so the unit stored
   - `video@k` counts any event of the right video.
   - `tIoU.5@1` counts a top-1 in the right video that overlaps the GT event by at least 0.5.
   - The per-query top-1 answers are saved to `per_query.csv`.
-- **Query** (`search.EventIndex`): `EventIndex.load(db).search(q_vec, top_k)` returns `[{rank, score, video_id, ts, te, caption, seg_key}]`. A free-text query is encoded with `encode.encode_texts` after a single `encode.load_model`. That step needs Omni-fix, because the model code lives there; the search itself is plain numpy.
+- **Query** (`search.EventIndex`): `EventIndex.load(db).search(q_vec, top_k)` returns `[{rank, score, video_id, ts, te, caption, seg_key}]`. A free-text query is encoded with `encode.encode_texts` after a single `encode.load_model(base, beats, adapter)`. That step needs the model, using the vendored code. The search itself is plain numpy.
+- **Hand-written queries** (`queries.evaluate_custom`): same metrics, computed by the shared `evaluate.score_event_queries`.
 
 ## Why not `omniretriever.cli extract`
 
@@ -41,12 +52,12 @@ The fine-tuned adapter was scored with `scripts/eval_youcookii.py`. That script 
 
 The CLI uses PyAV with a square center-crop and WAVE's 336 px floor, so its vectors are not the ones the eval measured.
 
-`encode.py` imports `MockDataArgs`, the dataset and the collator straight from Omni-fix (without modifying Omni-fix) and loads the model the same way the eval does:
+`encode.py` uses the vendored dataset and collator (`third_party/omni_fix`, an unmodified copy). `EvalDataArgs` is a field-for-field copy of the eval's `MockDataArgs`, and the model is loaded the same way the eval loads it:
 - **av:** a record with no caption turn, giving `mllm_embeds` (the all-layer fusion head).
 - **text:** `caption + <|im_end|>` goes through the thinker's text model, and the embedding is the last token of the last layer. This is the eval's label branch, which has **no** `classify_linear`. It is not `OmniRetriever.encode_text`, whose vector lives in a different space.
 - **Error handling:** a record that fails to load is written to `failed.jsonl`. Normally the dataset would silently swap it for a random sample.
 
-Cell 15's sanity check confirms all this: text→clip on `gt` with the eval's gallery must reproduce the eval's t2m R@1 within 1 point, otherwise the run stops.
+Cell 12's sanity check confirms all this: text→clip on `gt` with the eval's gallery must reproduce the eval's t2m R@1 within 1 point, otherwise the run stops.
 
 Note: every window, including `global`, gets **8 frames, with audio center-cropped to 8 s**. For `global`, a video several minutes long is seen as just 8 frames plus 8 s of audio.
 

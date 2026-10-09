@@ -42,7 +42,6 @@ class Config:
     video_root: str = ""            # where the encoder reads them (local copy on Colab)
 
     # --- models ------------------------------------------------------------
-    omni_repo: str = ""
     wave_path: str = ""
     beats_path: str = ""
     adapter_ft: str = ""
@@ -68,7 +67,6 @@ class Config:
             meta_dir=f"{drive_data}/metadata",
             video_src=f"{drive_data}/videos",
             video_root="/content/videos",
-            omni_repo="/content/Omni-fix",
             wave_path="/content/WAVE_HOME/WAVE-7B",
             beats_path="/content/WAVE_HOME/BEATs_iter3_plus_AS2M_finetuned_on_AS2M_cpt2.pt",
             adapter_ft="/content/my_checkpoint",          # copy of {run}/best
@@ -124,6 +122,15 @@ class Config:
     @property
     def text_store(self) -> Path:
         return self.tag_dir / "raw" / "text"
+
+    @property
+    def custom_text_store(self) -> Path:
+        """Vectors of hand-written queries, keyed by text hash (``q_<md5>__text``)."""
+        return self.tag_dir / "raw" / "custom_text"
+
+    @property
+    def custom_todo(self) -> Path:
+        return self.common_dir / f"custom_queries_{self.tag}.jsonl"
 
     def partition_names(self) -> list[str]:
         return list(self.base_partitions) + [n for n in self.extra_partitions if n not in self.base_partitions]

@@ -1,73 +1,114 @@
-"""Encode segments (``av``) and captions (``text``) exactly as ``eval_youcookii.py`` does.
+"""Encode GT events (``av``) and queries (``text``) with the fine-tuned Omni checkpoint.
 
-Why not ``omniretriever.cli extract``: the fine-tuned adapter was scored with
-``scripts/eval_youcookii.py``, which feeds the *training* pipeline
-(``LazySupervisedDataset``: decord, frames resized to 50176 px keeping the aspect ratio,
-chat-template prompt, doubled ``<|AUDIO|>`` slots for BEATs). The CLI goes through
-``omniretriever.inference`` (PyAV, centre-crop, WAVE's 336 px floor, no doubling), so
-its vectors are not the ones the eval measured. Here nothing in Omni-fix is changed:
-``MockDataArgs`` and the dataset/collator are imported from it, and the model is loaded
-with the same steps as ``eval_youcookii.main``.
+No training here: the LoRA adapter is only loaded and run forward.
 
-* ``av``  : one record per segment, no caption turn -> ``outputs.mllm_embeds``
-  (all-layer fusion head over ``<video>Please describe the video.<|im_end|>``).
-* ``text``: ``caption + <|im_end|>`` through the thinker's text model, last token of the
-  last layer -- the label branch of ``Qwen2_5OmniThinkerForConditionalGeneration.forward``
-  that produced ``text_embeds`` in the eval. This is *not* ``OmniRetriever.encode_text``
-  (which routes text through ``classify_linear``); that vector lives in another space.
+The encoding is the exact pipeline ``scripts/eval_youcookii.py`` (Omni-fix) used to score
+the checkpoint, so the vectors are the ones that eval measured:
+
+* the model, processor and data pipeline come from ``third_party/omni_fix`` (an unmodified
+  copy of the Omni-fix modules, see ``third_party/omni_fix/VENDORED.md``) -- no clone needed;
+* ``EvalDataArgs`` below copies ``MockDataArgs`` of ``eval_youcookii.py`` field for field
+  (8 frames, 50176 px keeping the aspect ratio, 8 s centre-cropped audio cut from the mp4,
+  BEATs on, all-layer fusion head), and ``load_model`` repeats its loading steps.
+
+Two encoders:
+
+* ``av``  : one record per event, no caption turn -> ``outputs.mllm_embeds`` (all-layer fusion
+  head over ``<video>Please describe the video.<|im_end|>``, ``<|AUDIO|>`` doubled).
+* ``text``: ``query + <|im_end|>`` through the thinker's text model, last token of the last
+  layer -- the label branch of ``Qwen2_5OmniThinkerForConditionalGeneration.forward`` that
+  produced ``text_embeds`` in the eval. (``OmniRetriever.encode_text`` routes text through
+  ``classify_linear`` instead; that vector lives in another space.)
 
 Output is a directory of ``chunk_*.npz`` files keyed ``<id>__<modality>`` (L2-normalised
-fp32, as the eval normalises). A rerun skips every id already in a chunk, so a broken
-Colab session loses at most one chunk. Records that fail to load are logged to
-``failed.jsonl`` instead of being silently swapped for a random sample, which is what the
-dataset does when ``run_test`` is off.
+fp32). A rerun skips every id already in a chunk, so a broken Colab session loses at most one
+chunk. Records that fail to load go to ``failed.jsonl`` instead of being silently swapped for
+a random sample (what the dataset does when ``run_test`` is off).
 
     python -m omni_retrieval.encode --modality av --manifest segs_todo.jsonl --store raw/av \\
-        --omni-repo /content/Omni-fix --base-model .../WAVE-7B --beats-path .../BEATs.pt \\
-        --adapter .../best --video-root /content/videos
+        --base-model .../WAVE-7B --beats-path .../BEATs.pt --adapter .../best --video-root /content/videos
 """
 
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
-import subprocess
-import tempfile
 import sys
+import tempfile
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
 from .manifest import store_keys
 
-PAD_TOKEN_ID = 151643  # training/qwenvl/train/utils.py
+VENDOR_DIR = Path(__file__).resolve().parent.parent / "third_party" / "omni_fix"
+OMNI_FIX_COMMIT = "460257f (= d8444d7 + .gitignore), branch chien"
+PAD_TOKEN_ID = 151643  # qwenvl/train/utils.py
 
 
-# --------------------------------------------------------------------------- #
-# Model, loaded the way scripts/eval_youcookii.py loads it                     #
-# --------------------------------------------------------------------------- #
+class EvalDataArgs:
+    """Field-for-field copy of ``MockDataArgs`` in Omni-fix ``scripts/eval_youcookii.py``."""
 
-def import_eval_module(omni_repo: str):
-    """Import ``scripts/eval_youcookii.py`` as a module (its ``main`` is not run).
+    def __init__(self, manifest_path, processor, max_samples=None):
+        self.dataset_use = manifest_path
+        self.omni_processor = processor
+        self.image_processor = processor.image_processor
+        self.video_max_frames = 8
+        self.video_min_frames = 8
+        self.base_interval = 0.5
+        self.max_pixels = 50176
+        self.min_pixels = 50176
+        self.image_max_frame_pixels = 2073600
+        self.image_min_frame_pixels = 784
+        self.fixed_audio_duration = 8.0
+        self.pred_embeds = True
+        self.train_classify = True
+        self.classify_type = "all_layer"
+        self.use_beats = True
+        self.beats_only = False
+        self.use_tuple_infonce = False
+        self.run_test = False
+        self.do_sample = False
+        self.num_sample = 1
+        self.feature_size = 128
+        self.chunk_length = 30
+        self.hop_length = 160
+        self.sampling_rate = 16000
+        self.max_samples = max_samples
 
-    Importing it also puts ``training/`` and ``src/`` on ``sys.path``, which is what makes
-    ``qwenvl`` importable here.
-    """
-    path = Path(omni_repo) / "scripts" / "eval_youcookii.py"
-    spec = importlib.util.spec_from_file_location("eval_youcookii", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+
+def omni_modules() -> SimpleNamespace:
+    """Import the vendored Omni-fix classes (same imports, same order as eval_youcookii.py)."""
+    if not (VENDOR_DIR / "qwenvl").is_dir():
+        raise FileNotFoundError(f"vendored Omni-fix code not found at {VENDOR_DIR}")
+    if str(VENDOR_DIR) not in sys.path:
+        sys.path.insert(0, str(VENDOR_DIR))
+    try:  # eval_youcookii.py does this to dodge a deepspeed <-> transformers circular import
+        import deepspeed  # noqa: F401
+    except Exception:  # noqa: BLE001 - deepspeed is optional
+        pass
+    import transformers  # noqa: F401
+    from peft import PeftModel
+    from qwenvl.data.data_qwen import DataCollatorForOmniDataset, LazySupervisedDataset
+    from qwenvl.data.processing_qwen2_5_omni import Qwen2_5OmniProcessor
+    from qwenvl.model.qwen2_5_omni.configuration_qwen2_5_omni import Qwen2_5OmniThinkerConfig
+    from qwenvl.model.qwen2_5_omni.modeling_qwen2_5_omni import Qwen2_5OmniThinkerForConditionalGeneration
+    return SimpleNamespace(PeftModel=PeftModel, LazySupervisedDataset=LazySupervisedDataset,
+                           DataCollatorForOmniDataset=DataCollatorForOmniDataset,
+                           Qwen2_5OmniProcessor=Qwen2_5OmniProcessor,
+                           Qwen2_5OmniThinkerConfig=Qwen2_5OmniThinkerConfig,
+                           Qwen2_5OmniThinkerForConditionalGeneration=Qwen2_5OmniThinkerForConditionalGeneration)
 
 
-def load_model(omni_repo: str, base_model: str, beats_path: str, adapter: str,
-               device: str = "cuda", dtype: str = "bfloat16"):
-    """Return ``(model, processor, eval_module)``; mirrors ``eval_youcookii.main`` steps 1-2."""
-    ev = import_eval_module(omni_repo)
-    torch = ev.torch
+def load_model(base_model: str, beats_path: str, adapter: str, device: str = "cuda",
+               dtype: str = "bfloat16"):
+    """Return ``(model, processor)``; the steps of ``eval_youcookii.main`` [1/4]-[2/4]."""
+    import torch
+
+    om = omni_modules()
     for name, p in (("base model", base_model), ("BEATs", beats_path),
                     ("adapter", os.path.join(adapter, "adapter_model.safetensors"))):
         if not os.path.exists(p):
@@ -75,8 +116,8 @@ def load_model(omni_repo: str, base_model: str, beats_path: str, adapter: str,
     os.environ["BEATS_PATH"] = beats_path
     torch_dtype = {"bfloat16": torch.bfloat16, "float16": torch.float16}.get(dtype, torch.float32)
 
-    processor = ev.Qwen2_5OmniProcessor.from_pretrained(base_model)
-    cfg = ev.Qwen2_5OmniThinkerConfig.from_pretrained(base_model)
+    processor = om.Qwen2_5OmniProcessor.from_pretrained(base_model)
+    cfg = om.Qwen2_5OmniThinkerConfig.from_pretrained(base_model)
     if hasattr(cfg, "text_config"):
         if getattr(cfg.text_config, "pad_token_id", None) is None:
             cfg.text_config.pad_token_id = getattr(cfg, "pad_token_id", 151643)
@@ -89,36 +130,30 @@ def load_model(omni_repo: str, base_model: str, beats_path: str, adapter: str,
     cfg.audio_config.beats_path = beats_path
     cfg.audio_config.beats_only = False
 
-    model = ev.Qwen2_5OmniThinkerForConditionalGeneration.from_pretrained(
+    model = om.Qwen2_5OmniThinkerForConditionalGeneration.from_pretrained(
         base_model, config=cfg, torch_dtype=torch_dtype)
     beats_ckpt = torch.load(beats_path, map_location="cpu", weights_only=False)
     model.beats.load_state_dict(beats_ckpt["model"])
-    model = ev.PeftModel.from_pretrained(model, adapter)
+    model = om.PeftModel.from_pretrained(model, adapter)
     model = model.to(device).eval()
-    return model, processor, ev
+    return model, processor
 
 
-def preprocessing_params(ev, processor) -> dict:
-    """The data args the eval used, read from ``MockDataArgs`` itself (for meta.json)."""
-    args = ev.MockDataArgs("<manifest>", processor)
+def preprocessing_params(processor) -> dict:
+    """The data args the encoder uses (= eval_youcookii's), for meta.json."""
+    args = EvalDataArgs("<manifest>", processor)
     keys = ("video_max_frames", "video_min_frames", "base_interval", "max_pixels", "min_pixels",
             "fixed_audio_duration", "use_beats", "beats_only", "train_classify", "classify_type",
             "sampling_rate", "feature_size", "chunk_length", "hop_length")
     params = {k: getattr(args, k) for k in keys}
     params.update({
-        "pipeline": "scripts/eval_youcookii.py (LazySupervisedDataset, batch 1)",
+        "pipeline": "Omni-fix eval_youcookii.py pipeline (LazySupervisedDataset, batch 1), vendored",
+        "omni_fix_commit": OMNI_FIX_COMMIT,
         "av_prompt": "<video>\\nPlease describe the video. via chat template, <|AUDIO|> doubled",
-        "text": "caption + <|im_end|>, thinker.model last layer, last token (eval label branch)",
+        "text": "query + <|im_end|>, thinker.model last layer, last token (eval label branch)",
         "normalize": "L2",
     })
     return params
-
-
-def git_commit(repo: str) -> str:
-    try:
-        return subprocess.check_output(["git", "-C", repo, "rev-parse", "HEAD"], text=True).strip()
-    except Exception:  # noqa: BLE001
-        return "unknown"
 
 
 # --------------------------------------------------------------------------- #
@@ -144,11 +179,11 @@ def _to_device(batch: dict, device, torch_dtype, torch) -> dict:
 
 
 def encode_texts(model, tokenizer, texts: list[str], batch_size: int = 32) -> np.ndarray:
-    """Caption embeddings, L2-normalised ``[N, D]`` fp32.
+    """Query/caption embeddings, L2-normalised ``[N, D]`` fp32.
 
-    Reproduces the label branch: ``tokenizer(caption + "<|im_end|>")`` -> input embeddings ->
-    ``thinker.model`` -> ``[0][:, -1, :]``. Captions are batched only with captions of the
-    same token length, so no padding (and no shifted positions) enters a batch.
+    Reproduces the label branch: ``tokenizer(text + "<|im_end|>")`` -> input embeddings ->
+    ``thinker.model`` -> ``[0][:, -1, :]``. Texts are batched only with texts of the same
+    token length, so no padding (and no shifted positions) enters a batch.
     """
     import torch
 
@@ -221,19 +256,21 @@ class ChunkWriter:
         self.buf = {}
 
 
-def encode_av(model, processor, ev, records_path: Path, writer: ChunkWriter, device: str,
+def encode_av(model, processor, records_path: Path, writer: ChunkWriter, device: str,
               dtype: str, num_workers: int) -> dict:
     import torch
     from torch.utils.data import DataLoader
+    from tqdm.auto import tqdm
 
+    om = omni_modules()
     torch_dtype = {"bfloat16": torch.bfloat16, "float16": torch.float16}.get(dtype, torch.float32)
-    data_args = ev.MockDataArgs(str(records_path), processor)
+    data_args = EvalDataArgs(str(records_path), processor)
     # run_test only changes error handling here: a record that fails to load comes back
     # as None (logged below) instead of being replaced by a random other sample.
     data_args.run_test = True
-    ds = ev.LazySupervisedDataset(tokenizer=processor.tokenizer, data_args=data_args)
+    ds = om.LazySupervisedDataset(tokenizer=processor.tokenizer, data_args=data_args)
     ids = [r["id"] for r in ds.list_data_dict]
-    collator = ev.DataCollatorForOmniDataset()
+    collator = om.DataCollatorForOmniDataset()
     # Batch 1 like the eval: the fusion head pools a fixed last position, so padding
     # would change the embeddings. Workers only overlap the CPU decode with the GPU.
     loader = DataLoader(_Records(ds), batch_size=1, shuffle=False, collate_fn=_first,
@@ -241,7 +278,7 @@ def encode_av(model, processor, ev, records_path: Path, writer: ChunkWriter, dev
 
     times, t_prev, n_ok = [], None, 0
     with torch.inference_mode():
-        for i, item, err in ev.tqdm(loader, total=len(ds), desc="av"):
+        for i, item, err in tqdm(loader, total=len(ds), desc="av"):
             if item is None:
                 writer.fail(ids[i], err or "dataset returned None")
                 continue
@@ -264,9 +301,8 @@ def encode_av(model, processor, ev, records_path: Path, writer: ChunkWriter, dev
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--modality", choices=("av", "text"), required=True)
-    p.add_argument("--manifest", required=True, help="segs_todo.jsonl or caps_todo.jsonl")
-    p.add_argument("--store", required=True, help="chunk directory (raw/av or raw/text)")
-    p.add_argument("--omni-repo", required=True)
+    p.add_argument("--manifest", required=True, help="segs_todo.jsonl / caps_todo.jsonl / queries jsonl")
+    p.add_argument("--store", required=True, help="chunk directory (raw/av, raw/text, raw/custom_text)")
     p.add_argument("--base-model", required=True)
     p.add_argument("--beats-path", required=True)
     p.add_argument("--adapter", required=True)
@@ -299,12 +335,11 @@ def main(argv=None) -> int:
         return 0
 
     t0 = time.time()
-    model, processor, ev = load_model(a.omni_repo, a.base_model, a.beats_path, a.adapter, a.device, a.dtype)
+    model, processor = load_model(a.base_model, a.beats_path, a.adapter, a.device, a.dtype)
     load_sec = time.time() - t0
     writer = ChunkWriter(store, a.modality, a.chunk_size)
     meta = {"adapter": a.adapter, "base_model": a.base_model, "beats_path": a.beats_path,
-            "omni_commit": git_commit(a.omni_repo), "dtype": a.dtype,
-            "preprocessing": preprocessing_params(ev, processor)}
+            "dtype": a.dtype, "preprocessing": preprocessing_params(processor)}
     (store / "encoder_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
     t1 = time.time()
@@ -313,7 +348,7 @@ def main(argv=None) -> int:
         with open(pending_path, "w", encoding="utf-8") as f:
             for r in pending:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
-        stats = encode_av(model, processor, ev, pending_path, writer, a.device, a.dtype, a.num_workers)
+        stats = encode_av(model, processor, pending_path, writer, a.device, a.dtype, a.num_workers)
     else:
         vecs = encode_texts(model, processor.tokenizer, [r["text"] for r in pending], a.batch_size)
         for r, v in zip(pending, vecs):

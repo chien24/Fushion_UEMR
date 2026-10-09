@@ -4,15 +4,14 @@ Queries are always val captions (val = test in UEMR). The gallery is every val v
 with an mp4, topped up with dev videos as distractors (their captions are never
 queries). Trainsplit videos -- what the adapter was fine-tuned on -- are never used.
 
-Durations come from the mp4 header via ``scripts/convert_youcookii.py::probe_duration``
-of Omni-fix (shorter of the video and audio streams), not from the metadata: some
+Durations come from the mp4 header (``probe_duration``, copied from Omni-fix
+``convert_youcookii.py``: shorter of the video and audio streams), not from the metadata: some
 downloads are shorter than the original upload.
 """
 
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
 import random
@@ -51,19 +50,35 @@ def train_videos(meta_dir) -> set[str]:
     return {video_id(r) for r in read_jsonl(path)} if path.is_file() else set()
 
 
-def _load_probe(omni_repo: str):
-    path = Path(omni_repo) / "scripts" / "convert_youcookii.py"
-    spec = importlib.util.spec_from_file_location("_convert_youcookii", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.probe_duration
+def probe_duration(path: str) -> float | None:
+    """Seconds both streams cover, from the header only (copy of Omni-fix
+    ``scripts/convert_youcookii.py::probe_duration``).
+
+    The shorter of the video and audio stream: a frame window past the audio's end would
+    pair with a silent tail. ``None`` when the file cannot be opened or has no audio stream.
+    The container is closed as soon as the header is read.
+    """
+    import av
+    try:
+        with av.open(path) as container:
+            if not container.streams.video or not container.streams.audio:
+                return None
+            spans = [
+                float(s.duration * s.time_base)
+                for s in (container.streams.video[0], container.streams.audio[0])
+                if s.duration and s.time_base
+            ]
+            if not spans and container.duration:
+                spans = [container.duration / 1e6]
+            return min(spans) if spans else None
+    except Exception:  # noqa: BLE001 - PyAV raises several error types
+        return None
 
 
-def probe_durations(video_dir, video_ids, omni_repo: str, workers: int = 8) -> dict[str, float | None]:
-    probe = _load_probe(omni_repo)
+def probe_durations(video_dir, video_ids, workers: int = 8) -> dict[str, float | None]:
     ids = sorted(video_ids)
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        spans = pool.map(lambda v: probe(os.path.join(video_dir, f"{v}.mp4")), ids)
+        spans = pool.map(lambda v: probe_duration(os.path.join(video_dir, f"{v}.mp4")), ids)
         return dict(zip(ids, spans))
 
 
@@ -115,7 +130,7 @@ def build_subset(cfg: Config, workers: int = 8, write: bool = True) -> list[dict
                          cfg.smoke_videos, exclude=excluded)
     assert not {r["video_id"] for r in rows} & excluded, "a train video slipped into the gallery"
 
-    durations = probe_durations(cfg.video_src, [r["video_id"] for r in rows], cfg.omni_repo, workers)
+    durations = probe_durations(cfg.video_src, [r["video_id"] for r in rows], workers)
     unreadable = [v for v, d in durations.items() if not d]
     if unreadable:
         print(f"[subset] dropping {len(unreadable)} unreadable / audio-less mp4: {unreadable[:5]}")

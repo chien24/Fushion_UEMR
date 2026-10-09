@@ -1,0 +1,23 @@
+# Inference-only environment for omni_retrieval + the vendored Omni-fix code (third_party/omni_fix).
+# Matches the environment eval_youcookii.py scored the fine-tuned checkpoint in:
+# transformers 4.51.3 keeps the vendored Qwen2.5-Omni processor and image processor on the same API.
+# torch / torchaudio / torchvision: use the CUDA build Colab ships (not pinned here).
+transformers==4.51.3
+peft>=0.21.0
+accelerate>=0.34.0
+safetensors>=0.4.5
+tokenizers>=0.20.0
+huggingface_hub>=0.25.0
+
+# media: decord (frames, as in training/eval), PyAV (headers, audio cut), librosa/soundfile
+decord>=0.6.0
+av>=12.3.0
+librosa>=0.10.2
+soundfile>=0.12.1
+Pillow>=10.4.0
+
+numpy>=1.26.0
+einops>=0.8.0
+tqdm>=4.66.0
+pandas
+pytest

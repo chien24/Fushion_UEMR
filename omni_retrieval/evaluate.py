@@ -126,39 +126,34 @@ def _gt_clips(cache_dir) -> tuple[np.ndarray, np.ndarray]:
         return blob["seg_key"][sel], blob["emb"][sel].astype(np.float32)
 
 
-def evaluate_events(cache_dir, block: int = QUERY_BLOCK) -> tuple[dict, list[dict]]:
-    """Single-event retrieval: each val caption searches every GT event in ``events.npz``.
+def score_event_queries(index, q_emb, q_video, gt_ts, gt_te, pos, query_ids, query_texts,
+                        block: int = QUERY_BLOCK) -> tuple[dict, list[dict]]:
+    """Core of event-retrieval evaluation, shared by val captions and custom queries.
 
-    Correct = the caption's own event (same video *and* same window). Also reported:
-    ``video@k`` (an event of the right video in the top k, any window) and
-    ``tIoU.5@1`` (top-1 is the right video and overlaps the GT event by tIoU >= 0.5).
-    Returns ``(summary, per_query)``; ``per_query`` has the top-1 answer of every caption.
+    ``pos[i]`` is the database row of query i's GT event. Correct = that row ranks first.
+    Also reported: ``video@k`` (an event of the right video in the top k, any window) and
+    ``tIoU.5@1`` (top-1 is the right video and overlaps the GT window by tIoU >= 0.5).
+    Ranks are strict (``1 + #(score > positive)``). ``Q x N`` is computed per query block.
     """
-    from .search import EventIndex
-
-    index = EventIndex.load(cache_dir)
-    text = load_text(cache_dir)
-    pos = np.array([index.row_of.get(k, -1) for k in text["gt_seg_key"]])
-    if (pos < 0).any():
-        raise SanityCheckFailed(f"{int((pos < 0).sum())} captions have no event in events.npz")
-
+    q_video, gt_ts, gt_te, pos = map(np.asarray, (q_video, gt_ts, gt_te, pos))
     n = len(pos)
+    k5 = min(5, len(index))
     ranks = np.empty(n, dtype=np.int64)
-    top5 = np.empty((n, min(5, len(index))), dtype=np.int64)
+    top5 = np.empty((n, k5), dtype=np.int64)
     best = np.empty(n, dtype=np.float32)
     for s in range(0, n, block):
         blk = slice(s, s + block)
-        sim = index.scores(text["emb"][blk])                                  # [b, N]
+        sim = index.scores(q_emb[blk])                                          # [b, N]
         q = np.arange(sim.shape[0])
         ranks[blk] = 1 + (sim > sim[q, pos[blk]][:, None]).sum(1)
-        part = np.argpartition(-sim, top5.shape[1] - 1, axis=1)[:, :top5.shape[1]]
+        part = np.argpartition(-sim, k5 - 1, axis=1)[:, :k5]
         order = np.argsort(-np.take_along_axis(sim, part, 1), axis=1, kind="stable")
         top5[blk] = np.take_along_axis(part, order, 1)
         best[blk] = sim[q, top5[blk][:, 0]]
 
     top1 = top5[:, 0]
-    right_video = index.video_id[top5] == text["video_id"][:, None]            # [n, 5]
-    overlap = tiou_vec(index.ts[top1], index.te[top1], text["gt_ts"], text["gt_te"])
+    right_video = index.video_id[top5] == q_video[:, None]                      # [n, 5]
+    overlap = tiou_vec(index.ts[top1], index.te[top1], gt_ts, gt_te)
     summary = {
         **{f"event {k}": v for k, v in rank_metrics(ranks).items()},
         "event MRR": 100 * float(np.mean(1 / ranks)),
@@ -168,15 +163,29 @@ def evaluate_events(cache_dir, block: int = QUERY_BLOCK) -> tuple[dict, list[dic
         "queries": n, "events": len(index), "videos": len(set(index.video_id.tolist())),
     }
     per_query = [{
-        "caption_id": str(text["caption_id"][i]), "query": str(text["sentence"][i]),
-        "video_id": str(text["video_id"][i]),
-        "gt": f"[{text['gt_ts'][i]:.1f}, {text['gt_te'][i]:.1f}]",
+        "query_id": str(query_ids[i]), "query": str(query_texts[i]), "video_id": str(q_video[i]),
+        "gt": f"[{gt_ts[i]:.1f}, {gt_te[i]:.1f}]", "gt_caption": str(index.caption[pos[i]]),
         "rank": int(ranks[i]), "correct": bool(ranks[i] == 1),
         "top1_video": str(index.video_id[top1[i]]),
         "top1": f"[{index.ts[top1[i]]:.1f}, {index.te[top1[i]]:.1f}]",
         "top1_caption": str(index.caption[top1[i]]), "top1_score": round(float(best[i]), 4),
     } for i in range(n)]
     return summary, per_query
+
+
+def evaluate_events(cache_dir, block: int = QUERY_BLOCK) -> tuple[dict, list[dict]]:
+    """Single-event retrieval with the GT queries: every val caption in ``text.npz`` searches
+    every event in ``events.npz``; correct = the caption's own event. See ``score_event_queries``.
+    """
+    from .search import EventIndex
+
+    index = EventIndex.load(cache_dir)
+    text = load_text(cache_dir)
+    pos = np.array([index.row_of.get(k, -1) for k in text["gt_seg_key"]])
+    if (pos < 0).any():
+        raise SanityCheckFailed(f"{int((pos < 0).sum())} captions have no event in events.npz")
+    return score_event_queries(index, text["emb"], text["video_id"], text["gt_ts"], text["gt_te"],
+                               pos, text["caption_id"], text["sentence"], block)
 
 
 def text_to_clip(cache_dir) -> dict:

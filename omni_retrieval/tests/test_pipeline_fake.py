@@ -176,8 +176,43 @@ def test_event_metrics_hand_computed(prepared, tmp_path):
     assert summary["video@1"] == pytest.approx(100.0)
     assert summary["tIoU.5@1"] == pytest.approx(75.0)
     wrong = [q for q in per_query if not q["correct"]]
-    assert [q["caption_id"] for q in wrong] == ["vidA_0"]
+    assert [q["query_id"] for q in wrong] == ["vidA_0"]
     assert wrong[0]["top1"] == "[12.0, 20.0]" and wrong[0]["top1_caption"] == "fry onion"
+
+
+def test_custom_queries(prepared, tmp_path):
+    """Hand-written queries: GT window matched to an event by tIoU, unknown video skipped."""
+    from omni_retrieval.queries import encode_records, evaluate_custom, load_queries, text_key
+
+    av_store, _ = _write_store(prepared, tmp_path, "chunks")
+    out = tmp_path / "cache"
+    collect_events(prepared["event_rows"], av_store, out / "events.npz")
+    qfile = tmp_path / "q.jsonl"
+    rows = [
+        # GT window a bit off the YouCook2 one ([12,20]): tIoU 7/8 -> still event vidA [12,20]
+        {"query": "saute the onion", "video_id": "vidA", "ts": 13.0, "te": 20.0},
+        # query vector points at vidB [5,15] while GT is vidB [15,30] -> wrong event, right video
+        {"query": "pour pasta into a colander", "video_id": "vidB", "ts": 15.0, "te": 30.0},
+        {"query": "video not in the database", "video_id": "vidZ", "ts": 0.0, "te": 5.0},
+        {"query": "never encoded", "video_id": "vidA", "ts": 0.0, "te": 10.0},
+    ]
+    qfile.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    queries = load_queries(qfile)
+    assert [r["id"] for r in encode_records(queries)] == [text_key(r["query"]) for r in rows]
+    store = tmp_path / "custom_text"
+    store.mkdir()
+    np.savez(store / "chunk_a.npz", **{
+        f"{text_key(rows[0]['query'])}__text": _fake_vec("vidA__12.00_20.00"),
+        f"{text_key(rows[1]['query'])}__text": _fake_vec("vidB__5.00_15.00"),
+        f"{text_key(rows[2]['query'])}__text": _fake_vec("whatever"),
+    })
+
+    summary, per_query, skipped = evaluate_custom(out, qfile, store)
+    assert summary["queries"] == 2 and summary["skipped"] == 2
+    assert summary["event R@1"] == pytest.approx(50.0) and summary["video@1"] == pytest.approx(100.0)
+    assert per_query[0]["correct"] and per_query[0]["gt_tiou_to_event"] == pytest.approx(7 / 8, abs=0.01)
+    assert not per_query[1]["correct"] and per_query[1]["top1"] == "[5.0, 15.0]"
+    assert sorted(s["status"] for s in skipped) == ["not encoded yet", "video not in database"]
 
 
 def test_missing_ids_are_reported(prepared, tmp_path):
