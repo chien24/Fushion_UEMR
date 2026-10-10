@@ -24,6 +24,9 @@ from .subset import load_gt_annotations
 
 KEYS = ("R@0.3", "R@0.5", "R@0.7", "mIoU")
 REF_F1 = 0.535
+# final_eval covers the 394 val videos that still have features (YouCook2CaptionDataset skips the others);
+# the annotation json lists 457 val videos, so the check compares with 394, not with len(json)
+EXPECTED_VAL_VIDEOS = 394
 
 
 @torch.no_grad()
@@ -40,7 +43,8 @@ def official_parity(cfg: Config, records: dict[str, FeatureRecord], pipe_seg=Non
     vids = sorted(v for v in ann if v in records)
     info = checkpoint_info(cfg.checkpoint)
     ref = info.get("final_eval") or {}
-    print(f"[sanity] {len(vids)} / {len(ann)} val videos of the annotation json have features ({cfg.source})")
+    print(f"[sanity] {len(vids)} val videos with features ({cfg.source}); final_eval used {EXPECTED_VAL_VIDEOS} "
+          f"(the annotation json lists {len(ann)}, some no longer downloadable)")
 
     # 1. main weights, k = #GT  (train.py::evaluate)
     pipe_main = load_pipeline(cfg, use_seg_weights=False)
@@ -76,8 +80,9 @@ def official_parity(cfg: Config, records: dict[str, FeatureRecord], pipe_seg=Non
     rows.append({"metric": "F1@0.5 api (seg weights)", "ours": f1, "final_eval": REF_F1, "diff": f1 - REF_F1})
 
     gaps = [abs(x["diff"]) for x in rows[:4] if x["diff"] is not None]
-    ok = bool(gaps) and max(gaps) <= tol and len(vids) == len(ann)
-    out = {"n_videos": len(vids), "n_val_in_json": len(ann), "ours": ours, "final_eval": {k: ref.get(k) for k in KEYS},
+    ok = bool(gaps) and max(gaps) <= tol and len(vids) == EXPECTED_VAL_VIDEOS
+    out = {"n_videos": len(vids), "n_expected": EXPECTED_VAL_VIDEOS, "n_val_in_json": len(ann),
+           "n_gt": sum(len(g) for g in gts.values()), "ours": ours, "final_eval": {k: ref.get(k) for k in KEYS},
            "max_gap": max(gaps) if gaps else None, "tol": tol, "pass": ok, "f1_api": f1, "f1_ref": REF_F1,
            "feature_source": cfg.source, "checkpoint_run": info.get("run")}
     write_json(cfg.out_dir / "sanity.json", out)
@@ -85,7 +90,7 @@ def official_parity(cfg: Config, records: dict[str, FeatureRecord], pipe_seg=Non
     if ok:
         print(f"[sanity] PASS: max gap {max(gaps):.2f} <= {tol} points on all {len(vids)} val videos")
     else:
-        msg = (f"[sanity] FAIL: max gap {out['max_gap']} points (tol {tol}), {len(vids)}/{len(ann)} val videos")
+        msg = (f"[sanity] FAIL: max gap {out['max_gap']} points (tol {tol}), {len(vids)}/{EXPECTED_VAL_VIDEOS} val videos")
         if strict and not cfg.smoke:
             raise AssertionError(msg)
         print(msg + (" -- SMOKE: not stopping" if cfg.smoke else " -- strict=False: not stopping"))

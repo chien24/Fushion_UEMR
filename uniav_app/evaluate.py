@@ -85,9 +85,9 @@ def choose_theta(rows: list[dict], split: str = "dev") -> tuple[float, str]:
     smaller theta wins a tie. Falls back to val when the split is absent (SMOKE)."""
     cand = [r for r in rows if r["split"] == split]
     if not cand:
+        print(f"[theta] no {split!r} rows -> choosing on val (SMOKE only; not the UEMR protocol)")
         split = "val"
         cand = [r for r in rows if r["split"] == split]
-        print(f"[theta] no {split!r} rows -> choosing on val (SMOKE only; not the UEMR protocol)")
     best = min(cand, key=lambda r: (abs(r["mean_K_pred"] - r["mean_K_GT"]), r["theta"]))
     return float(best["theta"]), split
 
