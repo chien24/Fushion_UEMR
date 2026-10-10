@@ -1,0 +1,18 @@
+# UniAV/Athena application (uniav_app/): the only requirements file, for a Colab runtime of its own
+# (never in the same session as Omni). torch / torchvision / torchaudio: the versions preinstalled on Colab
+# (not pinned; torchaudio is listed so a non-Colab machine gets it, Colab already satisfies it).
+# transformers is NOT pinned (Omni's requirements.txt pins 4.51.3; this file does not touch that environment).
+numpy>=2.0,<2.1          # athena.pth is pickled with numpy 2.x; athena/requirements.txt asks numpy<2.1
+pyyaml                   # imported by athena/pipeline.py
+huggingface_hub          # checkpoint + encoders (nguyenminh04/athena), features (nguyenminh04/uniav-youcook2-data)
+sentence-transformers    # caption judge all-MiniLM-L6-v2
+scipy                    # Hungarian matching (linear_sum_assignment)
+pandas
+matplotlib
+pytest
+# video path (FEATURE_SOURCE 'extract', parity cell, "any mp4" demo): InternVideo2 + BEATs encoders.
+# Also needs: git clone --depth 1 https://github.com/OpenGVLab/InternVideo /content/InternVideo (unmodified), ffmpeg.
+timm
+einops
+torchaudio
+imageio-ffmpeg           # fallback ffmpeg for athena.encoders.media.find_ffmpeg

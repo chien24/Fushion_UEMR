@@ -8,6 +8,7 @@ accelerate>=0.34.0
 safetensors>=0.4.5
 tokenizers>=0.20.0
 huggingface_hub>=0.25.0
+torchao
 
 # media: decord (frames, as in training/eval), PyAV (headers, audio cut), librosa/soundfile
 decord>=0.6.0
