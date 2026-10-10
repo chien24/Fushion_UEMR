@@ -2,7 +2,8 @@
 # (never in the same session as Omni). torch / torchvision / torchaudio: the versions preinstalled on Colab
 # (not pinned; torchaudio is listed so a non-Colab machine gets it, Colab already satisfies it).
 # transformers is NOT pinned (Omni's requirements.txt pins 4.51.3; this file does not touch that environment).
-numpy>=2.0,<2.1          # athena.pth is pickled with numpy 2.x; athena/requirements.txt asks numpy<2.1
+numpy>=2.0               # athena.pth is pickled with numpy 2.x. No upper bound: Colab's own numpy is used
+                         # (numpy<2.1 forced a 15-minute source build of numpy 2.0.2 on Colab's Python)
 pyyaml                   # imported by athena/pipeline.py
 huggingface_hub          # checkpoint + encoders (nguyenminh04/athena), features (nguyenminh04/uniav-youcook2-data)
 sentence-transformers    # caption judge all-MiniLM-L6-v2
