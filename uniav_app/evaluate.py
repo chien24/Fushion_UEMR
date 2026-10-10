@@ -164,7 +164,7 @@ def evaluate_split(vids: list[str], gt: dict, raw: dict, pred: dict, pred_api: d
                            "P@0.5": p05["precision"], "R@0.5": p05["recall"], "F1@0.5": p05["f1"],
                            "mean_tIoU": mean_best_tiou({v: uemr[v]}, {v: gts[v]}),
                            "R@0.5_uniform_K_pred": prf({v: uni[v]}, {v: gts[v]}, 0.5)["recall"],
-                           "n_missed": sum(r["missed"] for r in g_rows), "n_split_gt": sum(r["split"] for r in g_rows),
+                           "n_missed": sum(r["missed"] for r in g_rows), "n_fragmented_gt": sum(r["fragmented"] for r in g_rows),
                            "n_fp_no_overlap": sum(r["fp_no_overlap"] for r in s_rows),
                            "n_merge_seg": sum(r["merge"] for r in s_rows)})
 
@@ -174,7 +174,7 @@ def evaluate_split(vids: list[str], gt: dict, raw: dict, pred: dict, pred_api: d
 
     res["errors"] = {
         "n_gt": len(gt_rows), "pct_gt_missed": 100 * float(np.mean([r["missed"] for r in gt_rows])) if gt_rows else 0.0,
-        "pct_gt_split": 100 * float(np.mean([r["split"] for r in gt_rows])) if gt_rows else 0.0,
+        "pct_gt_fragmented": 100 * float(np.mean([r["fragmented"] for r in gt_rows])) if gt_rows else 0.0,
         "pct_gt_in_merged_seg": 100 * float(np.mean([r["in_merged_seg"] for r in gt_rows])) if gt_rows else 0.0,
         "n_seg": len(seg_rows),
         "pct_seg_fp_no_overlap": 100 * float(np.mean([r["fp_no_overlap"] for r in seg_rows])) if seg_rows else 0.0,
@@ -232,7 +232,7 @@ def duration_rows(gt_rows: list[dict]) -> list[dict]:
                      "R@0.3": float(np.mean([r["match@0.3"] >= 0 for r in sub])),
                      "mean_best_tIoU": float(np.mean([r["best_tiou"] for r in sub])),
                      "pct_missed": 100 * float(np.mean([r["missed"] for r in sub])),
-                     "pct_split": 100 * float(np.mean([r["split"] for r in sub])),
+                     "pct_fragmented": 100 * float(np.mean([r["fragmented"] for r in sub])),
                      "pct_in_merged_seg": 100 * float(np.mean([r["in_merged_seg"] for r in sub])),
                      "mean_abs_left": offset_stats(r["left_offset"] for r in sub)["mean_abs"],
                      "mean_abs_right": offset_stats(r["right_offset"] for r in sub)["mean_abs"]})

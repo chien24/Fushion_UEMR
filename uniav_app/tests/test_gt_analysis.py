@@ -35,7 +35,7 @@ def test_analyze_video_flags():
             {"t_s": 70, "t_e": 80, "conf": 0.7}, {"t_s": 90, "t_e": 95, "conf": 0.6}]
     g, s = analyze_video(gts, segs)
     assert [r["missed"] for r in g] == [False, False, True, False]
-    assert [r["split"] for r in g] == [False, False, False, True]          # GT d cut into two segments
+    assert [r["fragmented"] for r in g] == [False, False, False, True]     # GT d cut into two segments
     assert g[0]["in_merged_seg"] and g[1]["in_merged_seg"]
     assert [r["merge"] for r in s] == [True, False, False, False]          # segment 0 covers a and b
     assert [r["fp_no_overlap"] for r in s] == [False, False, False, True]
@@ -64,6 +64,24 @@ def test_choose_theta_closest_count():
             {"split": "val", "theta": 0.5, "mean_K_pred": 7.5, "mean_K_GT": 7.5}]
     assert choose_theta(rows, "dev") == (0.3, "dev")                       # tie 0.5 vs 0.5 -> smaller theta
     assert choose_theta([r for r in rows if r["split"] == "val"], "dev") == (0.5, "val")
+
+
+def test_evaluate_split_end_to_end_without_judge():
+    from uniav_app.evaluate import evaluate_split
+    gt = {"v": [{"event_id": 0, "ts": 0, "te": 10, "caption": "a", "split": "val"},
+                {"event_id": 1, "ts": 60, "te": 80, "caption": "b", "split": "val"}]}
+    raw = {"v": {"duration": 100.0, "n": 100, "proposals": [{"ts": 0, "te": 10, "conf": 0.9},
+                                                            {"ts": 60, "te": 70, "conf": 0.8}]}}
+    ev = [{"t_s": 0, "t_e": 10, "conf": 0.9, "caption": "a"}, {"t_s": 60, "t_e": 70, "conf": 0.8, "caption": "x"},
+          {"t_s": 70, "t_e": 80, "conf": 0.7, "caption": "y"}]
+    pred = {"v": {"split": "val", "events": ev}}
+    pred_api = {"v": {"split": "val", "events": ev[:2]}}
+    out = evaluate_split(["v"], gt, raw, pred, pred_api, judge=None)
+    vr = out["video_rows"][0]
+    assert vr["split"] == "val" and vr["n_fragmented_gt"] == 1 and vr["K_pred"] == 3
+    assert all(r["split"] == "val" for r in out["gt_rows"] + out["seg_rows"])
+    assert out["metrics"]["errors"]["pct_gt_fragmented"] == 50.0
+    assert out["metrics"]["comparison"]["uniav_uemr"]["R@0.5"] == 1.0
 
 
 def test_theta_sweep_counts_fall_with_theta():

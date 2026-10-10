@@ -5,6 +5,9 @@
 - Cách copy: `git cat-file blob 48918c5:<path> > third_party/athena/<path>`. Nội dung giống từng byte với commit,
   kể cả xuống dòng LF (bản checkout trên Windows của repo gốc dùng CRLF vì `core.autocrlf=true`, nên không copy từ đó).
   Đã kiểm tra bằng `git hash-object --no-filters <file>`, kết quả trùng blob của commit cho mọi file.
+  `third_party/athena/.gitattributes` (`* -text`) cấm git đổi xuống dòng trong thư mục này: `LICENSE` gốc dùng CRLF,
+  và `core.autocrlf=true` trên Windows đã từng biến nó thành LF lúc commit (1070 thay vì 1091 byte).
+  Test `uniav_app/tests/test_vendored.py` kiểm tra lại kích thước và SHA256 trên Colab.
 - Giấy phép: MIT (`LICENSE`, Copyright (c) 2024 Tiantian Geng).
 - Cấu trúc thư mục được giữ nguyên để hai chỗ sau vẫn đúng: `athena/config.py::ROOT` (= thư mục cha của gói
   `athena`) và `athena/encoders/internvideo2.py::_extract_module` (nạp `ROOT/tools/extract_internvideo2.py` theo đường dẫn).

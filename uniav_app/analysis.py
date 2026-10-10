@@ -6,8 +6,8 @@ Definitions (one video, segments S, GT steps G):
 * **false positive (no overlap)**: a segment overlapping no GT; **unmatched@0.5**: not in a pair at 0.5.
 * **merge**: a segment covering >= 2 GT steps, "covering" = at least ``cover`` (0.5) of the GT's length
   lies inside the segment.
-* **split**: a GT step cut into >= 2 segments, i.e. >= 2 segments with at least ``cover`` of their own
-  length inside the GT.
+* **fragmented**: a GT step cut into >= 2 segments, i.e. >= 2 segments with at least ``cover`` of their own
+  length inside the GT. (Column ``fragmented``; ``split`` is the dataset split val/dev.)
 * **boundary offset** (seconds, pairs matched at tIoU >= 0.3): left = ts_pred - ts_gt, right = te_pred - te_gt
   (negative = the prediction starts / ends early).
 """
@@ -53,7 +53,7 @@ def analyze_video(gts: list[dict], segs: list[dict], thrs=(0.3, 0.5, 0.7), cover
                "dur": float(g[i, 1] - g[i, 0]), "dur_bin": duration_bin(float(g[i, 1] - g[i, 0])),
                "caption": ev.get("caption", ""), "best_tiou": biou, "best_seg": bi, "missed": biou <= 0.0,
                "n_parts": int(sum(inside[j][i] for j in range(len(s))))}
-        row["split"] = row["n_parts"] >= 2
+        row["fragmented"] = row["n_parts"] >= 2   # not "split": that key is the dataset split (val/dev)
         row["in_merged_seg"] = bool(bi >= 0 and sum(covers[bi]) >= 2)
         for t in thrs:
             pi, iou = pairs[t].get(i, (-1, 0.0))
