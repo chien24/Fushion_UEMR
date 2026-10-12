@@ -59,6 +59,11 @@ class SegmentIndex:
         te = np.maximum.reduceat(self.te, self.offsets)
         return SegmentIndex(emb, self.videos, ts, te, name)
 
+    def subset(self, videos) -> "SegmentIndex":
+        """The same index restricted to ``videos`` (a smaller gallery, e.g. the 394 val videos)."""
+        m = np.isin(self.seg_video, list(videos))
+        return SegmentIndex(self.emb[m], self.seg_video[m], self.ts[m], self.te[m], self.name)
+
     @property
     def n_videos(self) -> int:
         return len(self.videos)

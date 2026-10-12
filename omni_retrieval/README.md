@@ -89,7 +89,19 @@ Note: every window, including `global`, gets **8 frames, with audio center-cropp
 
 Durations come from the mp4 header (the shorter of the video and audio streams). Every segment is clamped to `[0, duration]`. A segment is dropped if it is empty or starts less than 1 s before the end of the file, the same rule `convert_youcookii.py` uses.
 
-To add a partition, for example Athena proposals (`uniav_pred`), `uni_M`, `rand_M` or `kmedoids_M`:
+The UEMR partitions R2–R6 are built by `partitions_uemr.py` from one `segments_pred.jsonl` (K_pred per video) and the UniAV `Z/` files, then run through notebook `notebooks/uemr_p2_p4_colab.ipynb` (P2 → P4):
+
+| name | segments |
+|---|---|
+| `uniav_pred` | Athena proposals after post-processing (R6) |
+| `uni_M` | K_pred equal segments (R3) |
+| `rand_M` | K_pred contiguous segments ≥ d_min, Dirichlet lengths, seed per video (R4) |
+| `kmedoids_M` | K_pred K-Medoids of Z (cosine), clip `[t − 1, t + 1]` per medoid (R5) |
+| `uni_chunk` | contiguous 14 s chunks, a last chunk ≤ d_min merged (R2) |
+
+`common/partitions/SOURCE.json` holds the sha256 of `segments_pred.jsonl`; a rerun refuses another file unless `--force`.
+
+To add a partition by hand, for example Athena proposals (`uniav_pred`), `uni_M`, `rand_M` or `kmedoids_M`:
 
 1. Write a JSON file `{"<video_id>": [[ts, te], ...], ...}`. Extra fields after `te`, such as a confidence, are ignored.
 2. In cell 5: `EXTRA_PARTITIONS = {'uniav_pred': '/content/drive/MyDrive/uemr/partitions/uniav_pred.json'}`.
@@ -127,3 +139,5 @@ hits  = index.search(q_vec, top_k=10, agg="max")           # agg: max | topk_mea
 The video score is `S(q, V) = max_i cos(q, e_i)` (MaxSim), and the timestamp is the segment at the argmax. The computation is one `Q × E^T` product, gathered into a `[Q, V, K_max]` array and reduced along the last axis. It runs in blocks of 512 queries, with no loop over videos.
 
 `evaluate.py` reports R@1/5/10, MedR and MnR per partition. It also reports `mom@.5|top1`: among queries whose top-1 video is correct, the share where the argmax segment has tIoU ≥ 0.5 with the GT event. `VCMR R@1 (tIoU.5)` is the same check measured over all queries.
+
+The main gallery is the 394 val videos: `evaluate(..., videos=gallery_videos(subset_json, "val"))` or `--split val` (the default; `--split all` keeps the dev distractors). The gallery is filtered at evaluation time with `SegmentIndex.subset`; never shrink it with `n_videos`, which rewrites `subset_videos.json` and `segments.npz`. `paired_bootstrap(rank_a, rank_b)` gives the R@k difference of two partitions over the same queries with a 95 % interval.

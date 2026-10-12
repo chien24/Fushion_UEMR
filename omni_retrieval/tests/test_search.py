@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from omni_retrieval.evaluate import evaluate_partition, rank_metrics
+from omni_retrieval.evaluate import evaluate_partition, gallery_videos, paired_bootstrap, rank_metrics
 from omni_retrieval.search import SegmentIndex, tiou, tiou_vec
 
 
@@ -114,3 +114,31 @@ def test_evaluate_partition_hand_computed(toy):
     assert row["mom@.5|top1"] == pytest.approx(50.0)        # 1 of the 2 top-1 hits
     assert row["VCMR R@1 (tIoU.5)"] == pytest.approx(100 / 3)
     assert row["vec/video"] == pytest.approx(5 / 3)
+
+
+def test_gallery_filter_hand_computed(toy, tmp_path):
+    # without B, q1's positive A (0.8) is the best video left -> every query ranks 1
+    text = {"emb": np.stack([unit(1, 0, 0), unit(0, 1, 0), unit(0, 0, 1)]),
+            "video_id": np.array(["A", "A", "C"]),
+            "gt_ts": np.array([0, 10, 0], dtype=np.float32),
+            "gt_te": np.array([8, 20, 10], dtype=np.float32)}
+    (tmp_path / "subset_videos.json").write_text(
+        '{"videos": [{"video_id": "A", "split": "val"}, {"video_id": "B", "split": "dev"}, '
+        '{"video_id": "C", "split": "val"}]}')
+    videos = gallery_videos(tmp_path / "subset_videos.json", "val")
+    assert videos == {"A", "C"} and gallery_videos(tmp_path / "subset_videos.json", "all") is None
+    row = evaluate_partition(toy, text, videos=videos)
+    assert row["videos"] == 2 and row["vec/video"] == pytest.approx(1.5)
+    assert row["R@1"] == pytest.approx(100.0) and row["MnR"] == pytest.approx(1.0)
+    assert toy.subset(videos).n_videos == 2 and toy.n_videos == 3      # the original index is untouched
+
+
+def test_paired_bootstrap():
+    a, b = np.array([1, 1, 2, 5]), np.array([1, 3, 2, 1])
+    r = paired_bootstrap(a, b, n_boot=500)
+    assert r["diff"] == pytest.approx(0.0)                    # hits a: 1,1,0,0  b: 1,0,0,1
+    assert r["ci_low"] <= 0 <= r["ci_high"]
+    same = paired_bootstrap(a, a)
+    assert same["diff"] == same["ci_low"] == same["ci_high"] == 0
+    best = paired_bootstrap(np.ones(10), np.full(10, 3))
+    assert best["diff"] == best["ci_low"] == 100 and best["p(diff<=0)"] == 0

@@ -13,7 +13,11 @@ Ranks are strict: ``1 + #(score > positive)``, as ``omniretriever.evaluation.met
 segments, which on the full val subset is the exact computation of
 ``eval_youcookii.py`` and so must reproduce its t2m R@1.
 
-    python -m omni_retrieval.evaluate <cache_dir> [--partitions gt global ...] [--ref best_val.json]
+    python -m omni_retrieval.evaluate <cache_dir> [--partitions gt global ...] [--ref best_val.json] \\
+        [--split val|all]
+
+The main gallery is the 394 val videos (``--split val``, filtered at evaluation time); ``all`` keeps the
+dev videos as distractors.
 """
 
 from __future__ import annotations
@@ -64,7 +68,23 @@ def video_ranks(index: SegmentIndex, text: dict, agg: str = "max") -> dict[str, 
             "best_ts": index.ts[best_pos], "best_te": index.te[best_pos]}
 
 
-def evaluate_partition(index: SegmentIndex, text: dict, agg: str = "max") -> dict:
+def gallery_videos(subset_path, split: str = "val") -> set[str] | None:
+    """Videos of ``subset_videos.json`` with ``split`` (``val`` = the main gallery); ``all`` -> None (no filter)."""
+    if split == "all":
+        return None
+    blob = json.loads(Path(subset_path).read_text(encoding="utf-8"))
+    return {r["video_id"] for r in blob["videos"] if r["split"] == split}
+
+
+def load_index(cache_dir, partition: str, videos=None) -> SegmentIndex:
+    """``SegmentIndex.load``, restricted to ``videos`` when given (never shrink the gallery via ``n_videos``)."""
+    index = SegmentIndex.load(cache_dir, partition)
+    return index if videos is None else index.subset(videos)
+
+
+def evaluate_partition(index: SegmentIndex, text: dict, agg: str = "max", videos=None) -> dict:
+    if videos is not None:
+        index = index.subset(videos)
     r = video_ranks(index, text, agg)
     row = {"partition": index.name, **rank_metrics(r["ranks"]),
            "vec/video": float(np.mean(index.counts)), "videos": index.n_videos,
@@ -77,17 +97,28 @@ def evaluate_partition(index: SegmentIndex, text: dict, agg: str = "max") -> dic
     return row
 
 
-def evaluate(cache_dir, partitions=DEFAULT_PARTITIONS, agg: str = "max") -> list[dict]:
+def evaluate(cache_dir, partitions=DEFAULT_PARTITIONS, agg: str = "max", videos=None) -> list[dict]:
+    """One row per partition. ``videos``: gallery restriction (``gallery_videos``), None = every video."""
     text = load_text(cache_dir)
     rows = []
     for name in partitions:
         try:
-            index = SegmentIndex.load(cache_dir, name)
+            index = load_index(cache_dir, name, videos)
         except KeyError as e:
             print(f"[evaluate] skip {name}: {e}")
             continue
         rows.append(evaluate_partition(index, text, agg))
     return rows
+
+
+def paired_bootstrap(rank_a, rank_b, k: int = 1, n_boot: int = 1000, seed: int = 0) -> dict:
+    """R@k(a) - R@k(b) in points over the same queries, with a 95 % percentile interval from resampling queries."""
+    d = (np.asarray(rank_a) <= k).astype(np.float64) - (np.asarray(rank_b) <= k).astype(np.float64)
+    idx = np.random.default_rng(seed).integers(0, len(d), size=(n_boot, len(d)))
+    boots = 100 * d[idx].mean(axis=1)
+    lo, hi = np.percentile(boots, [2.5, 97.5])
+    return {"diff": 100 * float(d.mean()), "ci_low": float(lo), "ci_high": float(hi),
+            "p(diff<=0)": float((boots <= 0).mean()), "n_queries": len(d), "n_boot": n_boot}
 
 
 COLUMNS = ("partition", "vec/video", "R@1", "R@5", "R@10", "MedR", "MnR", "mom@.5|top1",
@@ -265,9 +296,15 @@ def main(argv=None) -> int:
     p.add_argument("--ref", default=None, help="eval_youcookii JSON for the sanity check")
     p.add_argument("--csv", default=None)
     p.add_argument("--no-strict", action="store_true")
+    p.add_argument("--split", default="val", choices=("val", "dev", "all"),
+                   help="gallery: the videos of this split in subset_videos.json; 'all' = every video (498)")
+    p.add_argument("--subset", default=None, help="subset_videos.json (default <cache_dir>/../common/)")
     a = p.parse_args(argv)
     sanity_check(a.cache_dir, a.ref, strict=not a.no_strict)
-    rows = evaluate(a.cache_dir, a.partitions, a.agg)
+    subset = a.subset or Path(a.cache_dir).parent / "common" / "subset_videos.json"
+    videos = gallery_videos(subset, a.split)
+    print(f"[evaluate] gallery: {'all videos' if videos is None else f'{len(videos)} {a.split} videos'}")
+    rows = evaluate(a.cache_dir, a.partitions, a.agg, videos)
     print(markdown(rows))
     if a.csv:
         save_csv(rows, a.csv)
