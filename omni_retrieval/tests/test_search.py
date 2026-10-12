@@ -142,3 +142,20 @@ def test_paired_bootstrap():
     assert same["diff"] == same["ci_low"] == same["ci_high"] == 0
     best = paired_bootstrap(np.ones(10), np.full(10, 3))
     assert best["diff"] == best["ci_low"] == 100 and best["p(diff<=0)"] == 0
+
+
+def test_paired_bootstrap_by_video():
+    # video X: a hits both queries, b none; video Y: equal. diff = 2/5 = 40 points
+    a = np.array([1, 1, 1, 4, 4])
+    b = np.array([3, 2, 1, 4, 4])
+    groups = np.array(["X", "X", "Y", "Y", "Y"])
+    r = paired_bootstrap(a, b, n_boot=2000, unit="video", groups=groups)
+    assert r["diff"] == pytest.approx(40.0) and r["n_units"] == 2 and r["unit"] == "video"
+    # every resample is (X, X) -> 100, (Y, Y) -> 0 or one of each -> 40
+    assert r["ci_low"] == pytest.approx(0.0) and r["ci_high"] == pytest.approx(100.0)
+    one = paired_bootstrap(a[:2], b[:2], unit="video", groups=groups[:2])   # a single video: no spread
+    assert one["diff"] == one["ci_low"] == one["ci_high"] == 100
+    with pytest.raises(ValueError):
+        paired_bootstrap(a, b, unit="video")
+    with pytest.raises(ValueError):
+        paired_bootstrap(a, b, unit="caption", groups=groups)

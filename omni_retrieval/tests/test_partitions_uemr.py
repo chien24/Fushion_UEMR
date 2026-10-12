@@ -5,7 +5,9 @@ import json
 import numpy as np
 import pytest
 
-from omni_retrieval.partitions_uemr import (D_MIN, check, kmedoids, kmedoids_m, rand_m, run, uni_chunk,
+from omni_retrieval.partitions import MIN_SEG_SEC
+from omni_retrieval.partitions_uemr import (D_MIN, build_controls, check, check_shift, coverage, kmedoids, kmedoids_m,
+                                            rand_m, run, shift, uni_chunk, union,
                                             video_rng, window)
 
 
@@ -108,3 +110,53 @@ def test_run_end_to_end(tmp_path):
     seg_path.write_text("".join(json.dumps(r) + "\n" for r in seg_lines[:-1]))
     with pytest.raises(RuntimeError):
         run(out, seg_path, zdir, tmp_path / "subset_videos.json")
+
+
+# --------------------------------------------------------------------------- #
+# Controls of plan P6 §A3                                                     #
+# --------------------------------------------------------------------------- #
+
+def test_shift_keeps_count_and_lengths():
+    segs = [[5.0, 20.0], [30.0, 50.0], [52.5, 54.5]]
+    a = shift(segs, 60.0, video_rng(0, "vidA#uniav_shift"))
+    assert len(a) == 3 and a == sorted(a)
+    assert sorted(round(te - ts, 6) for ts, te in a) == [2.0, 15.0, 20.0]
+    assert all(0 <= ts < te <= 60.0 and ts <= 60.0 - MIN_SEG_SEC for ts, te in a)
+    assert a == shift(segs, 60.0, video_rng(0, "vidA#uniav_shift"))              # reproducible
+    assert a != shift(segs, 60.0, video_rng(1, "vidA#uniav_shift"))
+    assert shift([[0.0, 60.0]], 60.0, video_rng(0, "v")) == [[0.0, 60.0]]          # no room: stays at 0
+    # a 0.5 s GT event must not start in the last second (clamp would drop it at encode time)
+    short = shift([[10.0, 10.5]] * 200, 20.0, video_rng(0, "v"))
+    assert max(ts for ts, _ in short) <= 20.0 - MIN_SEG_SEC
+
+
+def test_union_and_coverage():
+    assert union([[0.0, 14.0], [5.0, 20.0]], [[0.001, 14.004], [14.0, 28.0]]) == [[0.0, 14.0], [5.0, 20.0],
+                                                                                  [14.0, 28.0]]
+    assert coverage([[0, 10], [5, 20], [30, 40]], 50.0) == pytest.approx(30 / 50)   # 0-20 and 30-40
+    assert coverage([[0, 50]], 50.0) == pytest.approx(1.0)
+
+
+def test_build_controls(tmp_path):
+    durations = {"vidA": 60.0, "vidB": 100.0}
+    files = {"uniav_pred": {"vidA": [[5.0, 20.0], [30.0, 50.0]], "vidB": [[10.0, 40.0]]},
+             "gt": {"vidA": [[0.0, 10.0]], "vidB": [[3.0, 9.0], [60.0, 75.5]]},
+             "uni_chunk": {"vidA": [[0.0, 14.0], [14.0, 28.0], [28.0, 42.0], [42.0, 60.0]],
+                           "vidB": [[i * 14.0, min((i + 1) * 14.0, 100.0)] for i in range(7)]}}
+    for name, part in files.items():
+        (tmp_path / f"{name}.json").write_text(json.dumps(part))
+    parts, rows = build_controls(tmp_path, durations, seed=0)
+    assert set(parts) == {"uniav_shift", "gt_shift", "uniav_pred+uni_chunk"}
+    assert [len(parts["uniav_shift"][v]) for v in ("vidA", "vidB")] == [2, 1]
+    assert [len(parts["gt_shift"][v]) for v in ("vidA", "vidB")] == [1, 2]
+    assert len(parts["uniav_pred+uni_chunk"]["vidA"]) == 6
+    by = {r["partition"]: r for r in rows}
+    assert by["uniav_shift"]["coverage source"] == pytest.approx(100 * (35 / 60 + 30 / 100) / 2, abs=0.01)
+    # a shifted partition with a wrong length is caught
+    bad = {"vidA": [[0.0, 10.0], [20.0, 41.0]], "vidB": [[0.0, 30.0]]}
+    with pytest.raises(AssertionError):
+        check_shift("uniav_shift", bad, files["uniav_pred"], durations)
+    # a video without segments in a source file is an error
+    (tmp_path / "gt.json").write_text(json.dumps({"vidA": [[0.0, 10.0]]}))
+    with pytest.raises(ValueError):
+        build_controls(tmp_path, durations)

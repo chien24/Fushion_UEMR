@@ -40,8 +40,9 @@ class SanityCheckFailed(RuntimeError):
     pass
 
 
-def load_text(cache_dir) -> dict[str, np.ndarray]:
-    with np.load(Path(cache_dir) / "text.npz") as blob:
+def load_text(cache_dir, name: str = "text.npz") -> dict[str, np.ndarray]:
+    """``text.npz`` (val queries) or another caption file of the same layout, e.g. ``text_dev.npz``."""
+    with np.load(Path(cache_dir) / name) as blob:
         out = {k: blob[k] for k in blob.files}
     out["emb"] = out["emb"].astype(np.float32)
     return out
@@ -111,14 +112,34 @@ def evaluate(cache_dir, partitions=DEFAULT_PARTITIONS, agg: str = "max", videos=
     return rows
 
 
-def paired_bootstrap(rank_a, rank_b, k: int = 1, n_boot: int = 1000, seed: int = 0) -> dict:
-    """R@k(a) - R@k(b) in points over the same queries, with a 95 % percentile interval from resampling queries."""
+def paired_bootstrap(rank_a, rank_b, k: int = 1, n_boot: int = 1000, seed: int = 0, unit: str = "query",
+                     groups=None) -> dict:
+    """R@k(a) - R@k(b) in points over the same queries, with a 95 % percentile interval.
+
+    ``unit='query'`` resamples queries. ``unit='video'`` resamples the source videos (``groups[i]`` = video of
+    query i) with replacement and keeps every query of each drawn video: queries of one video share their
+    positive and its segments, so they are not independent and the per-query interval is too narrow.
+    """
     d = (np.asarray(rank_a) <= k).astype(np.float64) - (np.asarray(rank_b) <= k).astype(np.float64)
-    idx = np.random.default_rng(seed).integers(0, len(d), size=(n_boot, len(d)))
-    boots = 100 * d[idx].mean(axis=1)
+    rng = np.random.default_rng(seed)
+    if unit == "query":
+        idx = rng.integers(0, len(d), size=(n_boot, len(d)))
+        boots = 100 * d[idx].mean(axis=1)
+        n_units = len(d)
+    elif unit == "video":
+        if groups is None or len(groups) != len(d):
+            raise ValueError("unit='video' needs groups (the video of every query)")
+        _, g = np.unique(np.asarray(groups), return_inverse=True)
+        sums, counts = np.bincount(g, weights=d), np.bincount(g).astype(np.float64)
+        idx = rng.integers(0, len(sums), size=(n_boot, len(sums)))
+        boots = 100 * sums[idx].sum(axis=1) / counts[idx].sum(axis=1)
+        n_units = len(sums)
+    else:
+        raise ValueError(f"unit must be 'query' or 'video', got {unit!r}")
     lo, hi = np.percentile(boots, [2.5, 97.5])
     return {"diff": 100 * float(d.mean()), "ci_low": float(lo), "ci_high": float(hi),
-            "p(diff<=0)": float((boots <= 0).mean()), "n_queries": len(d), "n_boot": n_boot}
+            "p(diff<=0)": float((boots <= 0).mean()), "n_queries": len(d), "unit": unit, "n_units": n_units,
+            "n_boot": n_boot}
 
 
 COLUMNS = ("partition", "vec/video", "R@1", "R@5", "R@10", "MedR", "MnR", "mom@.5|top1",
@@ -219,14 +240,16 @@ def evaluate_events(cache_dir, block: int = QUERY_BLOCK) -> tuple[dict, list[dic
                                pos, text["caption_id"], text["sentence"], block)
 
 
-def text_to_clip(cache_dir) -> dict:
+def text_to_clip(cache_dir, text_name: str = "text.npz") -> dict:
     """Text -> clip on the ``gt`` segments, two galleries.
 
     * ``subset``: every distinct GT clip of the subset (val + dev distractors).
-    * ``eval``  : one clip per val caption (diagonal), i.e. the matrix eval_youcookii
+    * ``eval``  : one clip per caption (diagonal), i.e. the matrix eval_youcookii
       scores. On the full val subset it is the same 3030 x 3030 problem.
+
+    ``text_name``: ``text_dev.npz`` gives the same two numbers for the dev captions (plan P6 §A1).
     """
-    text = load_text(cache_dir)
+    text = load_text(cache_dir, text_name)
     keys, emb = _gt_clips(cache_dir)
     uniq, first = np.unique(keys, return_index=True)
     row_of = {k: i for i, k in enumerate(uniq)}

@@ -17,6 +17,15 @@ sha256 of ``segments_pred.jsonl`` and of every file written; a rerun refuses a d
     python -m omni_retrieval.partitions_uemr --out <omni_cache>/common/partitions \\
         --segments <uniav_cache>/ft/segments_pred.jsonl --z-dir <uniav_cache>/ft/Z \\
         --subset <omni_cache>/common/subset_videos.json --seed 0
+
+Controls of plan P6 §A3 (``--controls``), built from the partition files already in ``--out``:
+
+* ``uniav_shift``           -- every R6 segment keeps its length, start drawn ``U[0, duration - length]``
+* ``gt_shift``              -- the same for the R7 (``gt``) segments
+* ``uniav_pred+uni_chunk``  -- union of R6 and R2 (duplicates dropped by the 0.01 s segment key)
+
+    python -m omni_retrieval.partitions_uemr --controls --out <omni_cache>/common/partitions \\
+        --subset <omni_cache>/common/subset_videos.json --seed 0
 """
 
 from __future__ import annotations
@@ -213,6 +222,112 @@ def check(name: str, part: dict, durations: dict, k_pred: dict, d_min: float = D
             "dropped by clamp": int(dropped)}
 
 
+# --------------------------------------------------------------------------- #
+# Controls (plan P6 §A3)                                                      #
+# --------------------------------------------------------------------------- #
+
+SHIFTS = {"uniav_shift": "uniav_pred", "gt_shift": "gt"}
+UNION = "uniav_pred+uni_chunk"
+CONTROLS = (*SHIFTS, UNION)
+
+
+def shift(segs, duration: float, rng: np.random.Generator) -> list[list[float]]:
+    """Same lengths, starts ``U[0, duration - length]`` drawn independently, sorted by time.
+
+    The upper bound is also kept ``<= duration - MIN_SEG_SEC`` so ``partitions.clamp`` never drops a short
+    segment at encode time. Times are not rounded: rounding both ends could change a length by 0.01 s.
+    """
+    out = []
+    for ts, te in segs:
+        length = float(te) - float(ts)
+        hi = max(0.0, min(float(duration) - length, float(duration) - MIN_SEG_SEC))
+        start = float(rng.uniform(0.0, hi)) if hi > 0 else 0.0
+        out.append([start, start + length])
+    return sorted(out)
+
+
+def union(*parts_of_video) -> list[list[float]]:
+    """Segments of several partitions of one video, one per 0.01 s key (the encoder's dedup rule)."""
+    seen = {}
+    for segs in parts_of_video:
+        for ts, te in segs:
+            seen.setdefault((round(float(ts), 2), round(float(te), 2)), [float(ts), float(te)])
+    return sorted(seen.values())
+
+
+def coverage(segs, duration: float) -> float:
+    """Length of the union of the segments / duration."""
+    total, end = 0.0, -np.inf
+    for ts, te in sorted(segs):
+        ts, te = max(float(ts), end), float(te)
+        if te > ts:
+            total += te - ts
+        end = max(end, te)
+    return total / float(duration) if duration else 0.0
+
+
+def check_shift(name: str, shifted: dict, source: dict, durations: dict) -> dict:
+    """Assert the shifted partition has the source's K and multiset of lengths, inside every video."""
+    for vid, segs in source.items():
+        new = shifted[vid]
+        assert len(new) == len(segs), f"{name}/{vid}: {len(new)} segments, source {len(segs)}"
+        a = np.sort([te - ts for ts, te in segs])
+        b = np.sort([te - ts for ts, te in new])
+        assert np.allclose(a, b, atol=1e-6), f"{name}/{vid}: lengths differ"
+        assert all(0 <= ts < te <= durations[vid] + 1e-6 for ts, te in new), f"{name}/{vid}: outside the video"
+    cov_src = [coverage(s, durations[v]) for v, s in source.items()]
+    cov_new = [coverage(s, durations[v]) for v, s in shifted.items()]
+    return {"partition": name, "source": SHIFTS[name], "videos": len(shifted),
+            "segments": sum(len(s) for s in shifted.values()),
+            "coverage source": round(100 * float(np.mean(cov_src)), 2),
+            "coverage shifted": round(100 * float(np.mean(cov_new)), 2)}
+
+
+def build_controls(parts_dir, durations: dict, seed: int = 0) -> tuple[dict[str, dict], list[dict]]:
+    """``uniav_shift``, ``gt_shift`` and the R6 + R2 union for every video of ``durations``.
+
+    Reads ``uniav_pred.json``, ``uni_chunk.json`` and ``gt.json`` from ``parts_dir`` (``gt.json`` is written by
+    ``manifest.prepare``). Videos missing from a source file are an error.
+    """
+    d = Path(parts_dir)
+    src = {n: json.loads((d / f"{n}.json").read_text(encoding="utf-8")) for n in ("uniav_pred", "gt", "uni_chunk")}
+    for n, part in src.items():
+        missing = sorted(set(durations) - set(part))
+        if missing:
+            raise ValueError(f"{n}.json has no segments for {len(missing)} videos: {missing[:5]}")
+    parts, rows = {}, []
+    for name, base in SHIFTS.items():
+        parts[name] = {v: shift(src[base][v], durations[v], video_rng(seed, f"{v}#{name}")) for v in sorted(durations)}
+        rows.append(check_shift(name, parts[name], {v: src[base][v] for v in durations}, durations))
+    parts[UNION] = {v: union(src["uniav_pred"][v], src["uni_chunk"][v]) for v in sorted(durations)}
+    n_union = [len(s) for s in parts[UNION].values()]
+    rows.append({"partition": UNION, "source": "uniav_pred + uni_chunk", "videos": len(n_union),
+                 "segments": int(sum(n_union)), "coverage source": None,
+                 "coverage shifted": round(100 * float(np.mean([coverage(s, durations[v])
+                                                                for v, s in parts[UNION].items()])), 2)})
+    return parts, rows
+
+
+def run_controls(out_dir, subset_path, seed: int = 0) -> list[dict]:
+    """Write the control partitions next to the others and record them in ``SOURCE.json`` (key ``controls``)."""
+    out = Path(out_dir)
+    durations = read_durations(subset_path)
+    parts, rows = build_controls(out, durations, seed)
+    files = {}
+    for name, part in parts.items():
+        path = out / f"{name}.json"
+        path.write_text(json.dumps(part), encoding="utf-8")
+        files[name] = {"file": path.name, "sha256": sha256(path)}
+    src = out / "SOURCE.json"
+    blob = json.loads(src.read_text(encoding="utf-8")) if src.is_file() else {}
+    blob["controls"] = {"seed": seed, "commit": _git_commit(), "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "sources": {n: sha256(out / f"{n}.json") for n in ("uniav_pred", "gt", "uni_chunk")},
+                        "partitions": files, "summary": rows}
+    src.write_text(json.dumps(blob, indent=1), encoding="utf-8")
+    print(f"[partitions_uemr] controls {list(parts)} -> {out}")
+    return rows
+
+
 def _git_commit() -> str | None:
     try:
         return subprocess.run(["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "HEAD"],
@@ -274,15 +389,21 @@ def run(out_dir, segments_path, z_dir, subset_path, seed: int = 0, chunk_sec: fl
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--out", required=True, help="<omni_cache>/common/partitions")
-    p.add_argument("--segments", required=True, help="<uniav_cache>/ft/segments_pred.jsonl")
-    p.add_argument("--z-dir", required=True, help="<uniav_cache>/ft/Z")
+    p.add_argument("--segments", help="<uniav_cache>/ft/segments_pred.jsonl")
+    p.add_argument("--z-dir", help="<uniav_cache>/ft/Z")
     p.add_argument("--subset", required=True, help="<omni_cache>/common/subset_videos.json")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--chunk-sec", type=float, default=CHUNK_SEC)
     p.add_argument("--d-min", type=float, default=D_MIN)
     p.add_argument("--force", action="store_true", help="accept a segments_pred.jsonl other than SOURCE.json's")
+    p.add_argument("--controls", action="store_true", help="only the P6 §A3 controls, from the files in --out")
     a = p.parse_args(argv)
-    rows = run(a.out, a.segments, a.z_dir, a.subset, a.seed, a.chunk_sec, a.d_min, a.force)
+    if a.controls:
+        rows = run_controls(a.out, a.subset, a.seed)
+    else:
+        if not (a.segments and a.z_dir):
+            p.error("--segments and --z-dir are required unless --controls")
+        rows = run(a.out, a.segments, a.z_dir, a.subset, a.seed, a.chunk_sec, a.d_min, a.force)
     cols = list(rows[0])
     print("| " + " | ".join(cols) + " |\n|" + "---|" * len(cols))
     for r in rows:

@@ -54,15 +54,18 @@ def unique_segments(rows: list[dict]) -> dict[str, dict]:
     return out
 
 
-def caption_table(events: dict[str, list[dict]], subset: list[dict]) -> list[dict]:
+def caption_table(events: dict[str, list[dict]], subset: list[dict], split: str = "val") -> list[dict]:
     """Queries: every val caption of a query-source video in the subset.
 
     ``gt_seg_key`` is the key of the caption's own clip in the ``gt`` partition, built
     with the same clamp/rounding, so the text->clip sanity check can find it.
+    ``split='dev'``: the dev captions of the subset's dev videos instead (plan P6 §A1, never queries of the
+    main table; they choose the fusion checkpoint).
     """
-    durations = {r["video_id"]: r["duration"] for r in subset if r["is_query_source"]}
+    durations = {r["video_id"]: r["duration"] for r in subset
+                 if (r["is_query_source"] if split == "val" else r["split"] == split)}
     out = []
-    for r in events["val"]:
+    for r in events[split]:
         v = video_id(r)
         if v not in durations:
             continue
