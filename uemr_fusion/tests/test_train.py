@@ -3,6 +3,7 @@
 import json
 
 import numpy as np
+import pytest
 import torch
 
 from omni_retrieval.evaluate import video_ranks
@@ -66,3 +67,27 @@ def test_overfit_mode(fusion_cache, tmp_path):
     res = json.loads((tmp_path / "of" / "overfit.json").read_text())
     assert res["videos"] == 6 and res["captions"] == 12 and res["steps"] == 120
     assert res["R@1 after"] >= res["R@1 before"] and res["loss last 10"] < res["loss first 10"]
+
+
+def test_seed_mean_bootstrap(tmp_path):
+    from uemr_fusion.evaluate import seed_mean_bootstrap
+    cap, vid = np.array(["q0", "q1", "q2", "q3"]), np.array(["X", "X", "Y", "Z"])
+    b = np.array([1, 2, 1, 3])                                   # R@1 (b) 50
+    paths = []
+    for name, c in (("D3", [1, 1, 1, 3]), ("D3_seed1", [1, 1, 1, 1])):   # R@1 (c) 75 and 100
+        (tmp_path / name).mkdir()
+        arrays = {"caption_id": cap, "video_id": vid}
+        for gal in ("val394", "all498"):
+            arrays[f"ranks_b_{gal}"], arrays[f"ranks_c_{gal}"] = b, np.array(c)
+        np.savez(tmp_path / name / "ranks.npz", **arrays)
+        paths.append(tmp_path / name / "ranks.npz")
+    rows = seed_mean_bootstrap(paths, n_boot=200)
+    by = {(r["gallery"], r["run"]): r for r in rows}
+    assert len(rows) == 6 and by["val394", "D3"]["(c) - (b)"] == pytest.approx(25.0)
+    mean = by["val394", "mean of 2"]
+    assert mean["R@1 (c)"] == pytest.approx(87.5) and mean["(c) - (b)"] == pytest.approx(37.5)
+    assert mean["ci_low"] <= 37.5 <= mean["ci_high"] and mean["videos"] == 3
+    np.savez(tmp_path / "D3_seed1" / "ranks.npz", caption_id=cap[::-1], video_id=vid,
+             **{f"ranks_{k}_{g}": b for k in "bc" for g in ("val394", "all498")})
+    with pytest.raises(ValueError, match="query order"):
+        seed_mean_bootstrap(paths)

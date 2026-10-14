@@ -119,8 +119,12 @@ def paired_bootstrap(rank_a, rank_b, k: int = 1, n_boot: int = 1000, seed: int =
     ``unit='query'`` resamples queries. ``unit='video'`` resamples the source videos (``groups[i]`` = video of
     query i) with replacement and keeps every query of each drawn video: queries of one video share their
     positive and its segments, so they are not independent and the per-query interval is too narrow.
+
+    ``rank_a`` may be ``[n_seeds, n_queries]`` (several runs scored on the same queries): the difference is then
+    the mean R@k over the seeds minus R@k(b), and every resample draws the same queries for all seeds.
     """
-    d = (np.asarray(rank_a) <= k).astype(np.float64) - (np.asarray(rank_b) <= k).astype(np.float64)
+    hit_a = (np.asarray(rank_a) <= k).astype(np.float64)
+    d = (hit_a.mean(axis=0) if hit_a.ndim == 2 else hit_a) - (np.asarray(rank_b) <= k).astype(np.float64)
     rng = np.random.default_rng(seed)
     if unit == "query":
         idx = rng.integers(0, len(d), size=(n_boot, len(d)))
@@ -271,6 +275,37 @@ def text_to_clip(cache_dir, text_name: str = "text.npz") -> dict:
         ranks_eval[blk] = 1 + (sim > sim[q - s, q][:, None]).sum(1)
     return {"subset": dict(rank_metrics(ranks_subset), gallery=len(G), MRR=100 * float(np.mean(1 / ranks_subset))),
             "eval": dict(rank_metrics(ranks_eval), gallery=len(T), MRR=100 * float(np.mean(1 / ranks_eval)))}
+
+
+def text_to_clip_matched(cache_dir, n_videos: int, n_rep: int, seed: int = 0, text_name: str = "text.npz") -> list[dict]:
+    """Text -> clip on ``n_videos`` random videos, ``n_rep`` times (plan ``UEMR_BUOC_TIEP_P6.md`` §3.B).
+
+    Each repetition draws ``n_videos`` source videos without replacement; queries = every caption of those
+    videos, gallery = their distinct GT clips (the other clips of the same videos are the hard negatives).
+    This puts the trainsplit at the gallery size of the dev check (``text_to_clip`` on ``text_dev.npz``),
+    so the two R@1 can be compared. One row per repetition.
+    """
+    text = load_text(cache_dir, text_name)
+    keys, emb = _gt_clips(cache_dir)
+    uniq, first = np.unique(keys, return_index=True)
+    row_of = {k: i for i, k in enumerate(uniq)}
+    G = emb[first]
+    pos = np.array([row_of.get(k, -1) for k in text["gt_seg_key"]])
+    if (pos < 0).any():
+        raise SanityCheckFailed(f"{int((pos < 0).sum())} captions have no gt clip in {cache_dir}")
+    videos = np.unique(text["video_id"])
+    if n_videos > len(videos):
+        raise ValueError(f"n_videos={n_videos} > {len(videos)} videos with captions")
+    rng = np.random.default_rng(seed)
+    out = []
+    for rep in range(n_rep):
+        q = np.flatnonzero(np.isin(text["video_id"], rng.choice(videos, size=n_videos, replace=False)))
+        clips, own = np.unique(pos[q], return_inverse=True)          # own[i] = column of caption i's clip
+        sim = text["emb"][q] @ G[clips].T
+        ranks = 1 + (sim > sim[np.arange(len(q)), own][:, None]).sum(1)
+        out.append(dict(rank_metrics(ranks), rep=rep, videos=n_videos, queries=int(len(q)), gallery=int(len(clips)),
+                        MRR=100 * float(np.mean(1 / ranks))))
+    return out
 
 
 def sanity_check(cache_dir, ref_json=None, tol: float = 1.0, strict: bool = True) -> dict:

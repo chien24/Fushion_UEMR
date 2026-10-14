@@ -5,9 +5,12 @@
 * ``split_metrics`` text -> video R@k over one split's own videos (the dev check of every epoch)
 * ``final_eval``    val once: galleries 394 (val) and 498 (val + dev), column (b) from the same cache, R@1 by GT
                     length and by near-duplicate count, paired bootstrap (c) - (b) by video and by query
+* ``seed_mean_bootstrap``  mean R@1 of several seed runs - column (b), bootstrap by video, from their ``ranks.npz``
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -100,6 +103,35 @@ def duplicate_counts(text: dict, dup_csv) -> np.ndarray | None:
     dup = pd.read_csv(dup_csv, usecols=["query_id", DUP_COLUMN])
     m = dict(zip(dup["query_id"].astype(str), dup[DUP_COLUMN]))
     return np.array([m.get(str(c), np.nan) for c in text["caption_id"]], dtype=np.float64)
+
+
+def seed_mean_bootstrap(ranks_paths, n_boot: int = 1000, seed: int = 0,
+                        galleries=("val394", "all498")) -> list[dict]:
+    """Column (c) of runs that differ only by seed, against column (b), bootstrap by video (``UEMR_BUOC_TIEP_P6.md`` §3.A).
+
+    ``ranks_paths``: the ``ranks.npz`` of each run (``final_eval`` arrays; same queries in the same order and the
+    same column (b), both checked). Per gallery: one row per run and one ``mean`` row, the mean R@1 over the runs
+    minus R@1 (b), on one resampling of the source videos shared by every row (seed ``seed``).
+    """
+    runs = [np.load(p, allow_pickle=True) for p in ranks_paths]
+    names = [Path(p).parent.name for p in ranks_paths]
+    ref = runs[0]
+    for name, r in zip(names[1:], runs[1:]):
+        if not np.array_equal(r["caption_id"], ref["caption_id"]):
+            raise ValueError(f"{name}: other queries or query order than {names[0]}")
+    rows = []
+    for gal in galleries:
+        b = ref[f"ranks_b_{gal}"]
+        for name, r in zip(names[1:], runs[1:]):
+            if not np.array_equal(r[f"ranks_b_{gal}"], b):
+                raise ValueError(f"{name}: column (b) of {gal} differs from {names[0]} (other cache?)")
+        c = np.stack([r[f"ranks_c_{gal}"] for r in runs])
+        for name, a in [*zip(names, c), (f"mean of {len(runs)}", c)]:
+            bs = paired_bootstrap(a, b, 1, n_boot, seed, "video", ref["video_id"])
+            rows.append({"gallery": gal, "run": name, "R@1 (c)": 100 * float((a <= 1).mean()),
+                         "R@1 (b)": 100 * float((b <= 1).mean()), "(c) - (b)": bs["diff"], "ci_low": bs["ci_low"],
+                         "ci_high": bs["ci_high"], "p(diff<=0)": bs["p(diff<=0)"], "videos": bs["n_units"]})
+    return rows
 
 
 def final_eval(model, val: FusionSplit, dev: FusionSplit, use_global: bool = False, shuffle_z: bool = False,

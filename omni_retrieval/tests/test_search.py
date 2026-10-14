@@ -159,3 +159,52 @@ def test_paired_bootstrap_by_video():
         paired_bootstrap(a, b, unit="video")
     with pytest.raises(ValueError):
         paired_bootstrap(a, b, unit="caption", groups=groups)
+
+
+def test_paired_bootstrap_mean_of_seeds():
+    b = np.array([1, 3, 2, 1, 5, 1])
+    s0 = np.array([1, 1, 2, 1, 5, 3])            # hits 1,1,0,1,0,0 vs b 1,0,0,1,0,1 -> 0
+    s1 = np.array([1, 1, 1, 1, 1, 1])            # all hits -> +50
+    groups = np.array(["X", "X", "Y", "Y", "Z", "Z"])
+    mean = paired_bootstrap(np.stack([s0, s1]), b, n_boot=500, unit="video", groups=groups)
+    one = [paired_bootstrap(s, b, n_boot=500, unit="video", groups=groups)["diff"] for s in (s0, s1)]
+    assert mean["diff"] == pytest.approx(np.mean(one)) == pytest.approx(25.0)
+    twice = paired_bootstrap(np.stack([s0, s0]), b, n_boot=500, unit="video", groups=groups)
+    alone = paired_bootstrap(s0, b, n_boot=500, unit="video", groups=groups)
+    assert (twice["diff"], twice["ci_low"], twice["ci_high"]) == (alone["diff"], alone["ci_low"], alone["ci_high"])
+
+
+def test_segment_index_bias(toy):
+    # the toy rows in their input order; bias is given in that order (rows 1 and 4 are video B)
+    emb = np.stack([unit(1, 0, 0), unit(0, 1, 0), unit(0.6, 0.8, 0), unit(0, 0, 1), unit(0.8, 0, 0.6)])
+    vid = np.array(["A", "B", "A", "C", "B"])
+    ts = np.array([0, 0, 10, 0, 5], np.float32)
+    te = np.array([10, 5, 20, 30, 9], np.float32)
+    biased = SegmentIndex(emb, vid, ts, te, "b", np.array([0.0, 0.5, 0.0, 0.0, 0.5], np.float32))
+    q = unit(0.75, 0.5, 0.43)[None]
+    plain, _ = toy.score_matrix(q)
+    s, _ = biased.score_matrix(q)
+    assert toy.bias is None
+    np.testing.assert_allclose(s[0], plain[0] + np.array([0.0, 0.5, 0.0]), rtol=1e-6)
+    assert biased.subset(["B", "C"]).bias.tolist() == [0.5, 0.5, 0.0]
+
+
+def test_text_to_clip_matched(tmp_path):
+    from omni_retrieval.evaluate import text_to_clip_matched
+    rng = np.random.default_rng(0)
+    vids = [f"v{i}" for i in range(6)]
+    keys, emb, caps = [], [], []
+    for v in vids:
+        for j in range(3):                                   # 3 GT clips per video, one caption each
+            keys.append(f"{v}__{j:.2f}_{j + 1:.2f}")
+            emb.append(rng.normal(size=8))
+            caps.append((f"{v}_{j}", v, keys[-1]))
+    emb = np.asarray(emb, np.float32) / np.linalg.norm(emb, axis=1, keepdims=True)
+    np.savez(tmp_path / "segments.npz", seg_key=np.array(keys), partition=np.array(["gt"] * len(keys)),
+             video_id=np.array([k.split("__")[0] for k in keys]), emb=emb.astype(np.float16))
+    np.savez(tmp_path / "text.npz", caption_id=np.array([c[0] for c in caps]), video_id=np.array([c[1] for c in caps]),
+             gt_seg_key=np.array([c[2] for c in caps]), emb=emb.astype(np.float16))   # caption = its own clip
+    rows = text_to_clip_matched(tmp_path, n_videos=4, n_rep=5, seed=1)
+    assert len(rows) == 5 and all(r["queries"] == r["gallery"] == 12 and r["R@1"] == 100 for r in rows)
+    with pytest.raises(ValueError):
+        text_to_clip_matched(tmp_path, n_videos=7, n_rep=1)

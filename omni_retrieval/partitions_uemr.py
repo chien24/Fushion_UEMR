@@ -266,6 +266,18 @@ def coverage(segs, duration: float) -> float:
     return total / float(duration) if duration else 0.0
 
 
+def segment_stats(segments: dict, durations: dict) -> dict:
+    """Shape of one partition over the videos of ``durations``: segments per video, length (s), coverage (%)."""
+    vids = [v for v in durations if v in segments]
+    k = np.array([len(segments[v]) for v in vids])
+    lens = np.array([float(te) - float(ts) for v in vids for ts, te in segments[v]])
+    cov = np.array([coverage(segments[v], durations[v]) for v in vids])
+    return {"videos": len(vids), "K mean": float(k.mean()), "K median": float(np.median(k)),
+            "len mean (s)": float(lens.mean()), "len median (s)": float(np.median(lens)),
+            "len p10 (s)": float(np.percentile(lens, 10)), "len p90 (s)": float(np.percentile(lens, 90)),
+            "coverage mean (%)": 100 * float(cov.mean()), "duration median (s)": float(np.median([durations[v] for v in vids]))}
+
+
 def check_shift(name: str, shifted: dict, source: dict, durations: dict) -> dict:
     """Assert the shifted partition has the source's K and multiset of lengths, inside every video."""
     for vid, segs in source.items():

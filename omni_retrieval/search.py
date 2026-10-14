@@ -23,12 +23,15 @@ AGGS = ("max", "topk_mean", "lse")
 
 
 class SegmentIndex:
-    def __init__(self, emb: np.ndarray, video_id, ts, te, name: str = ""):
+    def __init__(self, emb: np.ndarray, video_id, ts, te, name: str = "", bias=None):
+        """``bias``: optional per-segment term added to every cosine, ``s_i = cos(q, e_i) + bias_i`` (Exp 5:
+        ``beta * log conf_i``); given in the order of the input rows."""
         order = np.lexsort((np.asarray(ts), np.asarray(video_id)))  # by video, then time
         self.emb = np.asarray(emb, dtype=np.float32)[order]
         self.seg_video = np.asarray(video_id)[order]
         self.ts = np.asarray(ts, dtype=np.float32)[order]
         self.te = np.asarray(te, dtype=np.float32)[order]
+        self.bias = None if bias is None else np.asarray(bias, dtype=np.float32)[order]
         self.name = name
         self.videos, self.offsets, self.counts = np.unique(self.seg_video, return_index=True,
                                                            return_counts=True)
@@ -62,7 +65,8 @@ class SegmentIndex:
     def subset(self, videos) -> "SegmentIndex":
         """The same index restricted to ``videos`` (a smaller gallery, e.g. the 394 val videos)."""
         m = np.isin(self.seg_video, list(videos))
-        return SegmentIndex(self.emb[m], self.seg_video[m], self.ts[m], self.te[m], self.name)
+        return SegmentIndex(self.emb[m], self.seg_video[m], self.ts[m], self.te[m], self.name,
+                            None if self.bias is None else self.bias[m])
 
     @property
     def n_videos(self) -> int:
@@ -82,6 +86,8 @@ class SegmentIndex:
         best = np.empty((len(q), self.n_videos), dtype=np.int64)
         for s in range(0, len(q), chunk):
             sim = q[s:s + chunk] @ self.emb.T                       # [q, N]
+            if self.bias is not None:
+                sim = sim + self.bias[None]
             g = np.where(valid[None], sim[:, safe], -np.inf)         # [q, V, K]
             best[s:s + chunk] = safe[v_idx, g.argmax(axis=2)]
             if agg == "max":
