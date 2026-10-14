@@ -44,6 +44,9 @@ def parse_args(argv=None):
     p.add_argument("--delta", type=float, default=5.0)
     p.add_argument("--shuffle-z", action="store_true", help="control: Z of another video of the batch")
     p.add_argument("--use-global", action="store_true", help="add c_g = e_g to every video's vectors")
+    p.add_argument("--d-h", type=int, default=256, help="width of the fusion (d -> d_h -> d)")
+    p.add_argument("--alpha-lr", type=float, default=1e-3,
+                   help="lr of alpha (the size of the move of e; with --lr it would reach about 0.006 per epoch)")
     p.add_argument("--heads", type=int, default=8)
     p.add_argument("--dropout", type=float, default=0.1)
     p.add_argument("--ff", type=int, default=2048)
@@ -63,11 +66,15 @@ def parse_args(argv=None):
     return p.parse_args(argv)
 
 
-def optimizer(model, lr: float, wd: float):
-    """AdamW; no weight decay on alpha, biases, norms and embeddings' 1-d tensors (decay would pull alpha to 0)."""
-    decay = [p for p in model.parameters() if p.requires_grad and p.ndim >= 2]
-    no_decay = [p for p in model.parameters() if p.requires_grad and p.ndim < 2]
-    return torch.optim.AdamW([{"params": decay, "weight_decay": wd}, {"params": no_decay, "weight_decay": 0.0}], lr=lr)
+def optimizer(model, lr: float, wd: float, alpha=None, alpha_lr: float | None = None):
+    """AdamW; no weight decay on alpha, biases, norms and embeddings' 1-d tensors (decay would pull alpha to 0).
+    ``alpha`` gets its own group with ``alpha_lr``."""
+    rest = [p for p in model.parameters() if p.requires_grad and p is not alpha]
+    groups = [{"params": [p for p in rest if p.ndim >= 2], "weight_decay": wd},
+              {"params": [p for p in rest if p.ndim < 2], "weight_decay": 0.0}]
+    if alpha is not None:
+        groups.append({"params": [alpha], "weight_decay": 0.0, "lr": alpha_lr or lr})
+    return torch.optim.AdamW(groups, lr=lr)
 
 
 def cosine_warmup(opt, total: int, warmup: float):
@@ -97,7 +104,7 @@ def train_step(model, ds: FusionSplit, cap: torch.Tensor, a, tau, gen: torch.Gen
 
 
 def build(a, d: int):
-    cfg = FusionConfig(d=d, heads=a.heads, delta=a.delta, use_cross=a.use_cross, use_self=a.use_self,
+    cfg = FusionConfig(d=d, d_h=a.d_h, heads=a.heads, delta=a.delta, use_cross=a.use_cross, use_self=a.use_self,
                        dropout=a.dropout, ff=a.ff)
     model = ContextFusion(cfg).to(a.device)
     log_inv_tau = torch.nn.Parameter(torch.tensor(math.log(1 / a.tau), device=a.device), requires_grad=a.learn_tau)
@@ -111,7 +118,7 @@ def run_overfit(a) -> dict:
     full = FusionSplit(a.cache, "train", a.partition, a.device)
     ds = full.subset(rng.choice(full.n_videos, size=min(a.overfit, full.n_videos), replace=False).tolist())
     cfg, model, log_inv_tau = build(a, ds.d)
-    opt = optimizer(model, a.lr, a.wd)
+    opt = optimizer(model, a.lr, a.wd, model.alpha, a.alpha_lr)
     gen = torch.Generator().manual_seed(a.seed)
     before = split_metrics(model, ds, a.use_global, a.shuffle_z)
     step, losses = 0, []
@@ -158,7 +165,7 @@ def main(argv=None) -> int:
     dev = FusionSplit(a.cache, "dev", a.partition, a.device)
     cfg, model, log_inv_tau = build(a, train.d)
     params = list(model.parameters()) + ([log_inv_tau] if a.learn_tau else [])
-    opt = optimizer(torch.nn.ParameterList(params), a.lr, a.wd)
+    opt = optimizer(torch.nn.ParameterList(params), a.lr, a.wd, model.alpha, a.alpha_lr)
     n_batches = len(one_per_video_batches(train.cap_video.cpu().numpy(), a.batch, np.random.default_rng(0)))
     sched = cosine_warmup(opt, n_batches * a.epochs, a.warmup)
     source = Path(a.cache) / "SOURCE.json"
@@ -190,7 +197,7 @@ def main(argv=None) -> int:
             sched.step()
             step += 1
             for k in acc:
-                acc[k] += float(o[k])
+                acc[k] += float(o[k].detach()) if torch.is_tensor(o[k]) else o[k]
         m = split_metrics(model, dev, a.use_global, a.shuffle_z)
         alpha = float(model.alpha.detach().cpu())
         row = {"epoch": epoch, "step": step, **{k: v / len(batches) for k, v in acc.items() if k != "n_evt"},

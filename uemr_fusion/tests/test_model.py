@@ -9,7 +9,7 @@ from uemr_fusion.model import ContextFusion, FusionConfig, windows
 
 
 def small(**kw):
-    return FusionConfig(d=16, heads=4, ff=32, pos_hidden=8, **kw)
+    return FusionConfig(d=16, d_h=8, heads=4, ff=32, pos_hidden=8, **kw)
 
 
 def inputs(B=2, K=3, T=256, d=16, seed=0):
@@ -59,8 +59,9 @@ def test_batched_cross_attention_equals_plain_formula():
     m = ContextFusion(small(delta=5.0)).eval()
     x = inputs()
     with torch.no_grad():
-        fast = m.cross(x["E"], x["segs"], x["Z"], x["t_sec"], x["duration"])
-        ref = naive_cross(m, x["E"], x["segs"], x["Z"], x["t_sec"], x["duration"])
+        h = m.inp(x["E"])
+        fast = m.cross(h, x["segs"], x["Z"], x["t_sec"], x["duration"])
+        ref = naive_cross(m, h, x["segs"], x["Z"], x["t_sec"], x["duration"])
     torch.testing.assert_close(fast, ref, atol=1e-5, rtol=1e-4)
 
 
@@ -76,6 +77,7 @@ def test_alpha_zero_is_identity_and_only_alpha_gets_gradient():
     assert m.alpha.grad.abs().item() > 0
     assert m.out.weight.grad.abs().max().item() == 0                     # ReZero: opens up once alpha moves
     assert m.z_proj.weight.grad.abs().max().item() == 0
+    assert m.inp.weight.grad.abs().max().item() == 0
 
 
 def test_padding_does_not_leak():
@@ -103,3 +105,5 @@ def test_ablation_flags_build_and_run():
         c = m(**x)
         assert c.shape == x["E"].shape and torch.isfinite(c).all()
         torch.testing.assert_close(c.norm(dim=-1), torch.ones(2, 3), atol=1e-5, rtol=0)
+        # unit-norm residual: e moves by at most alpha, so cos(c, e) >= sqrt(1 - alpha^2)
+        assert (c * x["E"]).sum(-1).min().item() >= math.sqrt(1 - 0.5 ** 2) - 1e-5

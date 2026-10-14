@@ -1,8 +1,13 @@
 """Context Fusion (UEMR_FINAL.md §4C, §13; plan P6 §C1), batched over videos and segments.
 
-    step 1  r_i = MHA(W_Q e_i, kv = z_proj(Z_j) + rel_emb(rel_ij)), j in the window [ts_i - delta, te_i + delta]
-    step 2  u   = TransformerEncoderLayer(e + r + p), p_i = order_emb(i) + MLP([centre_i, length_i] / duration)
-    step 3  c_i = L2norm(e_i + alpha * W_u u_i),  alpha = 0 at init
+    h_i = W_in e_i                                 (d -> d_h; the fusion runs at width d_h)
+    step 1  r_i = MHA(W_Q h_i, kv = z_proj(Z_j) + rel_emb(rel_ij)), j in the window [ts_i - delta, te_i + delta]
+    step 2  u   = TransformerEncoderLayer(h + r + p), p_i = order_emb(i) + MLP([centre_i, length_i] / duration)
+    step 3  c_i = L2norm(e_i + alpha * L2norm(W_u u_i)),  W_u: d_h -> d, alpha = 0 at init
+
+The width d_h (default 256) and the unit-norm residual come from the first P6 runs: at d_h = d = 3584 the
+fusion had 135M parameters for 7.8k training captions, dev peaked at epoch 1 and val fell; and ``|W_u u|`` was
+about 35, so alpha = 0.005 already moved ``e`` by about 0.17. Now alpha is the size of the move.
 
 Step 1 never builds the ``[B, K, T, d]`` key/value tensor (d = 3584): the projections are linear, so
 ``W_K (z_j + rel_r) = W_K z_j + W_K rel_r`` and the logits / outputs split into a ``Z`` part shared by every
@@ -27,7 +32,8 @@ BEFORE, INSIDE, AFTER = 0, 1, 2
 @dataclass
 class FusionConfig:
     d: int                       # Omni embedding size (read from the cache)
-    d_z: int = 1024              # UniAV level-0 Z channels (V 512 + A 512)
+    d_h: int = 256               # width of the fusion (checkpoints of the first P6 runs had d_h = d, no W_in)
+    d_z: int = 1024             # UniAV level-0 Z channels (V 512 + A 512)
     heads: int = 8
     delta: float = 5.0           # context window, seconds on each side
     use_cross: bool = True       # step 1
@@ -60,8 +66,9 @@ class ContextFusion(nn.Module):
     def __init__(self, cfg: FusionConfig):
         super().__init__()
         self.cfg = cfg
-        d, h = cfg.d, cfg.heads
-        assert d % h == 0, f"d={d} is not divisible by heads={h}"
+        d, h = cfg.d_h, cfg.heads
+        assert d % h == 0, f"d_h={d} is not divisible by heads={h}"
+        self.inp = nn.Linear(cfg.d, d)
         if cfg.use_cross:
             self.z_proj = nn.Linear(cfg.d_z, d)
             self.rel_emb = nn.Embedding(3, d)
@@ -73,12 +80,12 @@ class ContextFusion(nn.Module):
         self.pos_mlp = nn.Sequential(nn.Linear(2, cfg.pos_hidden), nn.GELU(), nn.Linear(cfg.pos_hidden, d))
         if cfg.use_self:
             self.inter = nn.TransformerEncoderLayer(d, h, cfg.ff, cfg.dropout, batch_first=True)
-        self.out = nn.Linear(d, d)
+        self.out = nn.Linear(d, cfg.d)
         self.alpha = nn.Parameter(torch.zeros(1))
 
     # ------------------------------------------------------------------ #
     def cross(self, e, segs, z, t_sec, duration):
-        """Step 1: ``r`` [B, K, d]."""
+        """Step 1: ``r`` [B, K, d_h] from ``e`` = ``h`` [B, K, d_h]."""
         B, K, d = e.shape
         T, H = z.shape[1], self.cfg.heads
         dh = d // H
@@ -109,11 +116,12 @@ class ContextFusion(nn.Module):
         """``E`` [B, K, d] (padded), ``kmask`` [B, K] True = real segment, ``segs`` [B, K, 2] seconds,
         ``Z`` [B, T, d_z], ``t_sec`` [B, T], ``duration`` [B]. Returns ``c`` [B, K, d] float32, L2-normalised."""
         e = E.float()
-        x = e + self.positions(segs.float(), duration.float(), e.shape[1])
+        h = self.inp(e)
+        x = h + self.positions(segs.float(), duration.float(), e.shape[1])
         if self.cfg.use_cross:
-            x = x + self.cross(e, segs.float(), Z.float(), t_sec.float(), duration.float())
+            x = x + self.cross(h, segs.float(), Z.float(), t_sec.float(), duration.float())
         u = self.inter(x, src_key_padding_mask=~kmask) if self.cfg.use_self else x
-        c = F.normalize(e + self.alpha * self.out(u).float(), dim=-1)
+        c = F.normalize(e + self.alpha * F.normalize(self.out(u).float(), dim=-1), dim=-1)
         return c.masked_fill(~kmask[..., None], 0.0)   # padding rows exactly 0, never NaN in a backward pass
 
 
