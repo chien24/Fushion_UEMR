@@ -55,9 +55,10 @@ def rank_metrics(ranks: np.ndarray) -> dict[str, float]:
             "MnR": float(np.mean(ranks))}
 
 
-def video_ranks(index: SegmentIndex, text: dict, agg: str = "max") -> dict[str, np.ndarray]:
-    """Rank of the positive video and the argmax segment inside it, per query."""
-    scores, best = index.score_matrix(text["emb"], agg=agg, chunk=QUERY_BLOCK)
+def video_ranks(index: SegmentIndex, text: dict, agg: str = "max", **agg_kw) -> dict[str, np.ndarray]:
+    """Rank of the positive video and the argmax segment inside it, per query. ``agg_kw``: ``k`` (topk_mean),
+    ``tau`` (lse)."""
+    scores, best = index.score_matrix(text["emb"], agg=agg, chunk=QUERY_BLOCK, **agg_kw)
     pos = np.array([index.video_index.get(v, -1) for v in text["video_id"]])
     covered = pos >= 0
     q = np.arange(len(pos))
@@ -83,10 +84,10 @@ def load_index(cache_dir, partition: str, videos=None) -> SegmentIndex:
     return index if videos is None else index.subset(videos)
 
 
-def evaluate_partition(index: SegmentIndex, text: dict, agg: str = "max", videos=None) -> dict:
+def evaluate_partition(index: SegmentIndex, text: dict, agg: str = "max", videos=None, **agg_kw) -> dict:
     if videos is not None:
         index = index.subset(videos)
-    r = video_ranks(index, text, agg)
+    r = video_ranks(index, text, agg, **agg_kw)
     row = {"partition": index.name, **rank_metrics(r["ranks"]),
            "vec/video": float(np.mean(index.counts)), "videos": index.n_videos,
            "queries": int(len(r["ranks"])), "coverage": 100 * float(np.mean(r["covered"]))}
