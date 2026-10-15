@@ -10,7 +10,7 @@ from omni_retrieval.evaluate import video_ranks
 from uemr_fusion.data import FusionSplit
 from uemr_fusion.evaluate import build_index, fuse, raw_vectors
 from uemr_fusion.model import ContextFusion, FusionConfig
-from uemr_fusion.train import main
+from uemr_fusion.train import main, parse_args
 
 SMALL = ["--d-h", "8", "--heads", "4", "--ff", "32", "--batch", "4", "--device", "cpu"]
 
@@ -63,7 +63,7 @@ def test_ablation_flags_and_global_partition(fusion_cache, tmp_path):
 
 def test_overfit_mode(fusion_cache, tmp_path):
     main(["--cache", str(fusion_cache), "--out", str(tmp_path / "of"), "--overfit", "6", "--steps", "120",
-          "--lr", "3e-3", "--alpha-lr", "3e-2", "--dropout", "0", *SMALL])
+          "--lr", "3e-3", "--alpha-lr", "3e-2", "--dropout", "0", "--tau-s", "0.02", "--no-global", *SMALL])
     res = json.loads((tmp_path / "of" / "overfit.json").read_text())
     assert res["videos"] == 6 and res["captions"] == 12 and res["steps"] == 120
     assert res["R@1 after"] >= res["R@1 before"] and res["loss last 10"] < res["loss first 10"]
@@ -91,3 +91,11 @@ def test_seed_mean_bootstrap(tmp_path):
              **{f"ranks_{k}_{g}": b for k in "bc" for g in ("val394", "all498")})
     with pytest.raises(ValueError, match="query order"):
         seed_mean_bootstrap(paths)
+
+
+def test_defaults_are_the_frozen_config():
+    """docs/UEMR_VIEC_TIEP_THEO.md §A5: a bare run is D3 (tau_s 0.05, lam 0.5, c_g on); --no-global turns c_g off."""
+    a = parse_args(["--cache", "c", "--out", "o"])
+    assert (a.tau_s, a.lam, a.use_global) == (0.05, 0.5, True)
+    assert parse_args(["--cache", "c", "--out", "o", "--no-global"]).use_global is False
+    assert parse_args(["--cache", "c", "--out", "o", "--use-global"]).use_global is True

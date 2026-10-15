@@ -26,6 +26,15 @@ Controls of plan P6 §A3 (``--controls``), built from the partition files alread
 
     python -m omni_retrieval.partitions_uemr --controls --out <omni_cache>/common/partitions \\
         --subset <omni_cache>/common/subset_videos.json --seed 0
+
+Boundary noise of P5 / Exp 3 (``--noise``, ``docs/UEMR_VIEC_TIEP_THEO.md`` §A1), from ``gt.json`` in ``--out``:
+``gt_noise_09`` ... ``gt_noise_03`` keep K_GT; each GT segment moves its centre by ``sigma * L * u_c`` and scales
+its length by ``exp(sigma * u_s)``, ``(u_c, u_s) ~ N(0, 1)`` drawn once per segment and shared by every level.
+``sigma`` is found by bisection, after clipping to the video and d_min, so that the mean best tIoU (every GT event:
+max tIoU with the segments of its video) hits each target. ``SOURCE.json`` key ``noise`` (``noise_s<seed>``).
+
+    python -m omni_retrieval.partitions_uemr --noise --out <omni_cache>/common/partitions \\
+        --subset <omni_cache>/common/subset_videos.json --seed 0 [--targets 0.9 0.7 0.5 0.3]
 """
 
 from __future__ import annotations
@@ -43,6 +52,7 @@ from pathlib import Path
 import numpy as np
 
 from .partitions import MIN_SEG_SEC, uniform
+from .search import tiou_vec
 
 D_MIN = 2.0
 CHUNK_SEC = 14.0
@@ -340,6 +350,148 @@ def run_controls(out_dir, subset_path, seed: int = 0) -> list[dict]:
     return rows
 
 
+# --------------------------------------------------------------------------- #
+# Boundary noise (P5 / Exp 3, RQ4)                                            #
+# --------------------------------------------------------------------------- #
+
+NOISE_TARGETS = (0.9, 0.7, 0.5, 0.3)
+NOISE_TOL = 0.02
+SIGMA_MAX = 16.0
+# partitions whose mean best tIoU goes on the P5 plot next to the noise curve
+TIOU_REFERENCE = ("gt", "uni_M_gt", "uniav_pred", "uni_M", "rand_M", "kmedoids_M", "uni_chunk", "global",
+                  "uniav_shift", "gt_shift")
+
+
+def noise_name(target: float, seed: int = 0) -> str:
+    """``0.9 -> gt_noise_09``; another seed gets a suffix (``gt_noise_05_s1``)."""
+    name = f"gt_noise_{int(round(target * 10)):02d}"
+    return name if seed == 0 else f"{name}_s{seed}"
+
+
+def noise_directions(gt: dict, seed: int = 0) -> dict[str, np.ndarray]:
+    """``(u_c, u_s) ~ N(0, 1)`` per GT segment, ``[K, 2]`` per video; drawn once, shared by every noise level."""
+    return {v: video_rng(seed, f"{v}#gt_noise").standard_normal((len(segs), 2)) for v, segs in gt.items()}
+
+
+def perturb(segs, duration: float, dirs: np.ndarray, sigma: float, d_min: float = D_MIN) -> list[list[float]]:
+    """Centre ``+ sigma * L * u_c``, length ``* exp(sigma * u_s)``, clipped to ``[0, duration]``; a segment left
+    shorter than d_min (or pushed out of the video) becomes the d_min window at its clipped centre."""
+    out = []
+    for (ts, te), (uc, us) in zip(segs, dirs):
+        length = float(te) - float(ts)
+        c = (float(ts) + float(te)) / 2 + sigma * length * uc
+        half = length * math.exp(sigma * us) / 2
+        a, b = max(0.0, c - half), min(float(duration), c + half)
+        if b - a < d_min:
+            a, b = window(min(max(c, 0.0), float(duration)), duration, d_min / 2)
+        out.append([a, b])
+    return _round(out, duration)
+
+
+def noisy_partition(gt: dict, durations: dict, dirs: dict, sigma: float, d_min: float = D_MIN) -> dict:
+    return {v: perturb(gt[v], durations[v], dirs[v], sigma, d_min) for v in sorted(gt)}
+
+
+def best_tiou(part: dict, gt: dict) -> np.ndarray:
+    """One value per GT event (videos sorted, events in file order): max tIoU with the segments of ``part`` in
+    the same video, 0 when the video has none. Its mean is the x axis of the P5 plot for every partition."""
+    out = []
+    for v in sorted(gt):
+        segs = np.asarray(part.get(v, []), dtype=np.float64).reshape(-1, 2)
+        for gs, ge in gt[v]:
+            out.append(float(tiou_vec(segs[:, 0], segs[:, 1], gs, ge).max()) if len(segs) else 0.0)
+    return np.array(out)
+
+
+def calibrate_sigma(gt: dict, durations: dict, dirs: dict, target: float, d_min: float = D_MIN,
+                    tol: float = NOISE_TOL, iters: int = 40) -> tuple[float, float, dict]:
+    """Bisection on sigma for mean best tIoU = ``target``, measured on the clipped, d_min, rounded segments.
+
+    The curve is not strictly monotone (clipping), so the result is checked: ``|achieved - target| <= tol``.
+    Returns ``(sigma, achieved, partition)``.
+    """
+    def mean_tiou(s):
+        part = noisy_partition(gt, durations, dirs, s, d_min)
+        return float(best_tiou(part, gt).mean()), part
+
+    lo, hi = 0.0, SIGMA_MAX
+    if mean_tiou(hi)[0] > target:
+        raise ValueError(f"sigma {SIGMA_MAX} still gives mean tIoU > {target}")
+    for _ in range(iters):
+        mid = (lo + hi) / 2
+        if mean_tiou(mid)[0] > target:
+            lo = mid
+        else:
+            hi = mid
+    sigma = (lo + hi) / 2
+    achieved, part = mean_tiou(sigma)
+    if abs(achieved - target) > tol:
+        raise ValueError(f"target {target}: sigma {sigma:.4f} gives {achieved:.4f} (tolerance {tol})")
+    return sigma, achieved, part
+
+
+def build_noise(parts_dir, durations: dict, seed: int = 0, targets=NOISE_TARGETS,
+                d_min: float = D_MIN) -> tuple[dict[str, dict], list[dict], list[dict]]:
+    """``gt_noise_*`` for every video of ``durations`` from ``gt.json``; ``(parts, level rows, reference rows)``.
+
+    Level rows: sigma, achieved mean tIoU, coverage, segment length. Reference rows: the same mean tIoU of the
+    other partition files found in ``parts_dir`` (R0, R2-R6, ``uni_M_gt``, controls).
+    """
+    d = Path(parts_dir)
+    gt_all = json.loads((d / "gt.json").read_text(encoding="utf-8"))
+    missing = sorted(set(durations) - set(gt_all))
+    if missing:
+        raise ValueError(f"gt.json has no segments for {len(missing)} videos: {missing[:5]}")
+    gt = {v: gt_all[v] for v in durations}
+    dirs = noise_directions(gt, seed)
+    parts, rows = {}, []
+    for target in targets:
+        name = noise_name(target, seed)
+        sigma, achieved, part = calibrate_sigma(gt, durations, dirs, target, d_min)
+        for v, segs in part.items():
+            assert len(segs) == len(gt[v]), f"{name}/{v}: {len(segs)} segments, K_GT {len(gt[v])}"
+            assert all(0 <= ts < te <= durations[v] for ts, te in segs), f"{name}/{v}: outside [0, {durations[v]}]"
+            assert all(te - ts >= min(d_min, durations[v]) - TOL for ts, te in segs), f"{name}/{v}: < d_min"
+            assert all(ts <= durations[v] - MIN_SEG_SEC for ts, _ in segs), f"{name}/{v}: dropped by clamp"
+        parts[name] = part
+        rows.append({"partition": name, "target tIoU": target, "sigma": round(sigma, 5),
+                     "mean tIoU": round(achieved, 4), **_shape(part, durations)})
+    ref = []
+    for name in TIOU_REFERENCE:
+        if (d / f"{name}.json").is_file():
+            part = json.loads((d / f"{name}.json").read_text(encoding="utf-8"))
+            ref.append({"partition": name, "mean tIoU": round(float(best_tiou(part, gt).mean()), 4),
+                        **_shape(part, durations)})
+    return parts, rows, ref
+
+
+def _shape(part: dict, durations: dict) -> dict:
+    s = segment_stats(part, durations)
+    return {"segments": int(sum(len(part.get(v, [])) for v in durations)), "len median (s)": round(s["len median (s)"], 2),
+            "coverage mean (%)": round(s["coverage mean (%)"], 2)}
+
+
+def run_noise(out_dir, subset_path, seed: int = 0, targets=NOISE_TARGETS, d_min: float = D_MIN) -> list[dict]:
+    """Write ``gt_noise_*.json`` next to ``gt.json`` and record them in ``SOURCE.json`` (key ``noise``)."""
+    out = Path(out_dir)
+    durations = read_durations(subset_path)
+    parts, rows, ref = build_noise(out, durations, seed, targets, d_min)
+    for name, part in parts.items():
+        path = out / f"{name}.json"
+        path.write_text(json.dumps(part), encoding="utf-8")
+        next(r for r in rows if r["partition"] == name)["sha256"] = sha256(path)
+    src = out / "SOURCE.json"
+    blob = json.loads(src.read_text(encoding="utf-8")) if src.is_file() else {}
+    blob["noise" if seed == 0 else f"noise_s{seed}"] = {
+        "seed": seed, "d_min": d_min, "tolerance": NOISE_TOL, "gt_sha256": sha256(out / "gt.json"),
+        "model": "centre += sigma*L*u_c, length *= exp(sigma*u_s), (u_c, u_s) ~ N(0,1) per segment shared by all "
+                 "levels; clip to [0, duration], d_min window if shorter; sigma by bisection on mean best tIoU",
+        "commit": _git_commit(), "created": time.strftime("%Y-%m-%d %H:%M:%S"), "levels": rows, "reference": ref}
+    src.write_text(json.dumps(blob, indent=1), encoding="utf-8")
+    print(f"[partitions_uemr] noise {list(parts)} -> {out}")
+    return rows + ref
+
+
 def _git_commit() -> str | None:
     try:
         return subprocess.run(["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "HEAD"],
@@ -409,9 +561,13 @@ def main(argv=None) -> int:
     p.add_argument("--d-min", type=float, default=D_MIN)
     p.add_argument("--force", action="store_true", help="accept a segments_pred.jsonl other than SOURCE.json's")
     p.add_argument("--controls", action="store_true", help="only the P6 §A3 controls, from the files in --out")
+    p.add_argument("--noise", action="store_true", help="only the P5 boundary-noise partitions, from gt.json in --out")
+    p.add_argument("--targets", nargs="*", type=float, default=list(NOISE_TARGETS), help="mean tIoU of each level")
     a = p.parse_args(argv)
     if a.controls:
         rows = run_controls(a.out, a.subset, a.seed)
+    elif a.noise:
+        rows = run_noise(a.out, a.subset, a.seed, a.targets, a.d_min)
     else:
         if not (a.segments and a.z_dir):
             p.error("--segments and --z-dir are required unless --controls")
@@ -419,7 +575,7 @@ def main(argv=None) -> int:
     cols = list(rows[0])
     print("| " + " | ".join(cols) + " |\n|" + "---|" * len(cols))
     for r in rows:
-        print("| " + " | ".join(str(r[c]) for c in cols) + " |")
+        print("| " + " | ".join(str(r.get(c, "")) for c in cols) + " |")
     return 0
 
 

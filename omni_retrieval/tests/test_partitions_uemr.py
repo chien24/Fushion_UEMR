@@ -6,9 +6,10 @@ import numpy as np
 import pytest
 
 from omni_retrieval.partitions import MIN_SEG_SEC
-from omni_retrieval.partitions_uemr import (D_MIN, build_controls, check, check_shift, coverage, kmedoids, kmedoids_m,
-                                            rand_m, run, shift, uni_chunk, union,
-                                            video_rng, window)
+from omni_retrieval.partitions_uemr import (D_MIN, NOISE_TOL, best_tiou, build_controls, calibrate_sigma, check,
+                                            check_shift, coverage, kmedoids, kmedoids_m, noise_directions, noise_name,
+                                            perturb, rand_m, run, run_noise, shift, uni_chunk, union, video_rng,
+                                            window)
 
 
 def _contiguous(segs, duration):
@@ -160,3 +161,89 @@ def test_build_controls(tmp_path):
     (tmp_path / "gt.json").write_text(json.dumps({"vidA": [[0.0, 10.0]]}))
     with pytest.raises(ValueError):
         build_controls(tmp_path, durations)
+
+
+# --------------------------------------------------------------------------- #
+# Boundary noise of P5 / Exp 3                                                #
+# --------------------------------------------------------------------------- #
+
+def _fake_gt(n_videos=40, seed=0):
+    """Videos of 60-300 s with 3-8 GT events of 3-40 s (some overlapping, some at the borders)."""
+    rng = np.random.default_rng(seed)
+    durations, gt = {}, {}
+    for i in range(n_videos):
+        v = f"vid{i:02d}"
+        dur = round(float(rng.uniform(60, 300)), 2)
+        lens = rng.uniform(3, 40, size=rng.integers(3, 9))
+        starts = rng.uniform(0, dur - lens)
+        durations[v] = dur
+        gt[v] = sorted([round(float(s), 2), round(float(s + l), 2)] for s, l in zip(starts, lens))
+    gt["vid00"][0] = [0.0, 12.0]                                  # an event at each border
+    gt["vid00"][-1] = [round(durations["vid00"] - 5.0, 2), durations["vid00"]]
+    gt["vid00"].sort()
+    return durations, gt
+
+
+def test_noise_name():
+    assert [noise_name(t) for t in (0.9, 0.7, 0.5, 0.3)] == ["gt_noise_09", "gt_noise_07", "gt_noise_05", "gt_noise_03"]
+    assert noise_name(0.5, seed=1) == "gt_noise_05_s1"
+
+
+def test_perturb_bounds_and_sigma_zero():
+    durations, gt = _fake_gt()
+    dirs = noise_directions(gt, seed=0)
+    v = "vid00"
+    assert perturb(gt[v], durations[v], dirs[v], 0.0) == gt[v]                    # all events >= d_min
+    for sigma in (0.3, 2.0, 16.0):
+        for vid in gt:
+            segs = perturb(gt[vid], durations[vid], dirs[vid], sigma)
+            assert len(segs) == len(gt[vid]) and segs == sorted(segs)
+            assert all(0 <= ts < te <= durations[vid] for ts, te in segs)
+            assert all(te - ts >= D_MIN - 0.011 for ts, te in segs)
+            assert all(ts <= durations[vid] - MIN_SEG_SEC for ts, _ in segs)
+    # a 1 s event keeps d_min, and the directions are drawn once per (seed, video)
+    assert perturb([[50.0, 51.0]], 100.0, np.zeros((1, 2)), 1.0) == [[49.5, 51.5]]
+    assert np.array_equal(noise_directions(gt, 0)[v], dirs[v])
+    assert not np.array_equal(noise_directions(gt, 1)[v], dirs[v])
+
+
+def test_best_tiou():
+    gt = {"a": [[0.0, 10.0], [20.0, 30.0]], "b": [[5.0, 15.0]]}
+    part = {"a": [[0.0, 10.0], [25.0, 35.0]], "b": []}
+    assert best_tiou(part, gt).tolist() == pytest.approx([1.0, 5 / 15, 0.0])
+    assert best_tiou(gt, gt).mean() == pytest.approx(1.0)
+
+
+def test_calibrate_sigma_hits_targets_and_is_monotone():
+    durations, gt = _fake_gt()
+    dirs = noise_directions(gt, seed=0)
+    sigmas = []
+    for target in (0.9, 0.7, 0.5, 0.3):
+        sigma, achieved, part = calibrate_sigma(gt, durations, dirs, target)
+        assert abs(achieved - target) <= NOISE_TOL
+        assert best_tiou(part, gt).mean() == pytest.approx(achieved)
+        sigmas.append(sigma)
+    assert sigmas == sorted(sigmas) and sigmas[0] > 0
+
+
+def test_run_noise_end_to_end(tmp_path):
+    durations, gt = _fake_gt()
+    subset = {"settings": {}, "videos": [{"video_id": v, "split": "val", "duration": d} for v, d in durations.items()]}
+    (tmp_path / "subset_videos.json").write_text(json.dumps(subset))
+    (tmp_path / "gt.json").write_text(json.dumps(gt))
+    (tmp_path / "uni_M_gt.json").write_text(json.dumps(
+        {v: [[d * i / len(gt[v]), d * (i + 1) / len(gt[v])] for i in range(len(gt[v]))] for v, d in durations.items()}))
+    rows = run_noise(tmp_path, tmp_path / "subset_videos.json", seed=0)
+    src = json.loads((tmp_path / "SOURCE.json").read_text())["noise"]
+    assert [r["partition"] for r in src["levels"]] == ["gt_noise_09", "gt_noise_07", "gt_noise_05", "gt_noise_03"]
+    assert all(abs(r["mean tIoU"] - r["target tIoU"]) <= NOISE_TOL for r in src["levels"])
+    ref = {r["partition"]: r["mean tIoU"] for r in src["reference"]}
+    assert ref["gt"] == pytest.approx(1.0) and 0 < ref["uni_M_gt"] < 1
+    n_gt = sum(map(len, gt.values()))
+    assert all(r["segments"] == n_gt for r in src["levels"]) and len(rows) == 4 + 2
+    before = (tmp_path / "gt_noise_05.json").read_text()
+    run_noise(tmp_path, tmp_path / "subset_videos.json", seed=0)                   # same seed, same files
+    assert (tmp_path / "gt_noise_05.json").read_text() == before
+    run_noise(tmp_path, tmp_path / "subset_videos.json", seed=1, targets=(0.5,))
+    blob = json.loads((tmp_path / "SOURCE.json").read_text())
+    assert (tmp_path / "gt_noise_05_s1.json").is_file() and "noise" in blob and "noise_s1" in blob

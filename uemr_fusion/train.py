@@ -1,7 +1,8 @@
 """Train one Context Fusion (plan P6 §C2-C5, runs D/E/F) on one partition of ``fusion_cache``.
 
-    python -m uemr_fusion.train --cache <fusion_cache> --partition uniav_pred --out <runs>/D1_ts0.02 \\
-        --tau-s 0.02 --lam 0 [--use-global] [--no-cross] [--no-self] [--delta 5] [--shuffle-z] [--seed 0]
+    python -m uemr_fusion.train --cache <fusion_cache> --partition uniav_pred --out <runs>/D3 [--seed 0]
+        # defaults = frozen config D3 (tau_s 0.05, lam 0.5, c_g on); ablations: --tau-s, --lam 0, --no-global,
+        # --no-cross, --no-self, --delta 0, --shuffle-z
     python -m uemr_fusion.train ... --overfit 32 --steps 200          # sanity check C6.6 (train R@1 > 90 %)
 
 Every epoch: one pass over the trainsplit captions in batches with one caption per video, then dev R@1 (773
@@ -37,13 +38,15 @@ def parse_args(argv=None):
     p.add_argument("--out", required=True, help="run directory")
     p.add_argument("--tau", type=float, default=0.05, help="InfoNCE temperature")
     p.add_argument("--learn-tau", action="store_true")
-    p.add_argument("--tau-s", type=float, default=0.02, help="LSE temperature of the training video score")
+    # defaults = the frozen P6 config (D3, NHAN_XET_KET_QUA_P6.md §4): tau_s 0.05, lam 0.5, c_g on
+    p.add_argument("--tau-s", type=float, default=0.05, help="LSE temperature of the training video score")
     p.add_argument("--lam", type=float, default=0.5, help="weight of L_evt (0 = L_vid only)")
     p.add_argument("--no-cross", dest="use_cross", action="store_false")
     p.add_argument("--no-self", dest="use_self", action="store_false")
     p.add_argument("--delta", type=float, default=5.0)
     p.add_argument("--shuffle-z", action="store_true", help="control: Z of another video of the batch")
-    p.add_argument("--use-global", action="store_true", help="add c_g = e_g to every video's vectors")
+    p.add_argument("--use-global", action="store_true", default=True, help="add c_g = e_g to every video's vectors")
+    p.add_argument("--no-global", dest="use_global", action="store_false")
     p.add_argument("--d-h", type=int, default=256, help="width of the fusion (d -> d_h -> d)")
     p.add_argument("--alpha-lr", type=float, default=1e-3,
                    help="lr of alpha (the size of the move of e; with --lr it would reach about 0.006 per epoch)")

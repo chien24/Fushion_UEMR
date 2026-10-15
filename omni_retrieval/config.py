@@ -14,6 +14,12 @@ Layout of the cache (one tree per Drive, shared by every adapter)::
 
 ``raw/`` is the real cache (deduplicated, append-only); ``segments.npz`` / ``text.npz``
 are rebuilt from it by ``collect`` whenever a partition is added.
+
+``variant`` (the hash of one UniAV output, ``omni_retrieval.uniav_version``) keeps the partitions and the
+collected files of that UniAV apart, so a new UniAV never overwrites the old tables; ``raw/`` stays shared::
+
+    <CACHE_ROOT>/common/partitions_<variant>/<name>.json
+    <CACHE_ROOT>/<tag>/<variant>/segments.npz, text.npz, events.npz, meta.json
 """
 
 from __future__ import annotations
@@ -34,6 +40,7 @@ class Config:
     seed: int = 0
     smoke: bool = False             # 5 videos end to end
     smoke_videos: int = 5
+    variant: str = ""               # UniAV output hash; "" = the original layout
 
     # --- data --------------------------------------------------------------
     drive_data: str = ""            # .../YouCookII on Drive (metadata/, videos/)
@@ -91,19 +98,23 @@ class Config:
 
     @property
     def partitions_dir(self) -> Path:
-        return self.common_dir / "partitions"
+        return self.common_dir / (f"partitions_{self.variant}" if self.variant else "partitions")
 
     @property
     def subset_path(self) -> Path:
         return self.common_dir / ("subset_videos_smoke.json" if self.smoke else "subset_videos.json")
 
     @property
+    def _todo_suffix(self) -> str:
+        return f"{self.tag}_{self.variant}" if self.variant else self.tag
+
+    @property
     def segs_todo(self) -> Path:
-        return self.common_dir / f"segs_todo_{self.tag}.jsonl"
+        return self.common_dir / f"segs_todo_{self._todo_suffix}.jsonl"
 
     @property
     def caps_todo(self) -> Path:
-        return self.common_dir / f"caps_todo_{self.tag}.jsonl"
+        return self.common_dir / f"caps_todo_{self._todo_suffix}.jsonl"
 
     @property
     def tag_dir(self) -> Path:
@@ -113,7 +124,8 @@ class Config:
 
     @property
     def out_dir(self) -> Path:
-        return self.tag_dir / "smoke" if self.smoke else self.tag_dir
+        out = self.tag_dir / self.variant if self.variant else self.tag_dir
+        return out / "smoke" if self.smoke else out
 
     @property
     def av_store(self) -> Path:

@@ -219,6 +219,8 @@ def main(argv=None) -> int:
     p.add_argument("--partitions", nargs="*", default=list(PARTITIONS))
     p.add_argument("--parity-only", action="store_true")
     p.add_argument("--no-parity", action="store_true", help="skip the column (b) check (fake data in the tests)")
+    p.add_argument("--expected", default=None,
+                   help='column (b) R@1 to reproduce, JSON {"partition": R@1}; default: P4 with the first UniAV')
     a = p.parse_args(argv)
     out = Path(a.out)
     if not a.parity_only:
@@ -234,7 +236,7 @@ def main(argv=None) -> int:
                      "files": {**blob.get("files", {}), **{f"{r['split']}_{r['partition']}": r for r in rows}}})
         src.write_text(json.dumps(blob, indent=1), encoding="utf-8")
     if "val" in a.splits and not a.no_parity:
-        par = parity(out)
+        par = parity(out, json.loads(a.expected) if a.expected else EXPECTED_VAL_R1)
         src = out / "SOURCE.json"
         blob = json.loads(src.read_text(encoding="utf-8")) if src.is_file() else {}
         blob["parity"] = par
