@@ -131,7 +131,7 @@ def run_overfit(a) -> dict:
             opt.zero_grad(set_to_none=True)
             out["loss"].backward()
             opt.step()
-            losses.append(float(out["loss"]))
+            losses.append(float(out["loss"].detach()))
             step += 1
             if step >= a.steps:
                 break

@@ -116,6 +116,17 @@ def test_table_rows_and_pairs(tmp_path):
     assert boots[0]["A - B"] == pytest.approx(50.0) and boots[0]["A"] == "R7" and boots[0]["split"] == "val"
 
 
+def test_coverage_regression_hand_computed():
+    from omni_retrieval.evaluate import coverage_regression
+    # per video d: X +100 (2 captions), Y 0 (1), Z +50 (2) points; dcov 0.2, 0.0, 0.1 -> exact line d = 0 + 500 x
+    ra = np.array([1, 1, 1, 1, 5])
+    rb = np.array([3, 3, 1, 4, 5])
+    vid = np.array(["X", "X", "Y", "Z", "Z"])
+    r = coverage_regression(ra, rb, vid, {"X": 0.2, "Y": 0.0, "Z": 0.1}, n_boot=200)
+    assert r["a (Δcov = 0)"] == pytest.approx(0.0, abs=1e-9) and r["b (mỗi 10% Δcov)"] == pytest.approx(50.0)
+    assert r["R@1 A - B"] == pytest.approx(60.0) and r["Δcov mean (điểm %)"] == pytest.approx(10.0)
+
+
 def test_rank_metrics_hand_computed():
     m = rank_metrics(np.array([1, 3, 12]))
     assert m["R@1"] == pytest.approx(100 / 3)

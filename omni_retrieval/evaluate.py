@@ -147,6 +147,30 @@ def paired_bootstrap(rank_a, rank_b, k: int = 1, n_boot: int = 1000, seed: int =
             "n_boot": n_boot}
 
 
+def coverage_regression(rank_a, rank_b, video_id, dcov: dict, n_boot: int = 1000, seed: int = 0) -> dict:
+    """RQ2 check of the P6 patch: per video ``d_v`` = R@1(a) - R@1(b) over its captions, ``dcov[v]`` = coverage(a)
+    - coverage(b) (fractions); weighted (by captions) least squares ``d_v = a + b * dcov_v``, bootstrap by video.
+    ``a`` = advantage at equal coverage, ``b`` per 10 % of coverage, both in R@1 points."""
+    hit = (np.asarray(rank_a) <= 1).astype(float) - (np.asarray(rank_b) <= 1).astype(float)
+    vids, inv = np.unique(np.asarray(video_id), return_inverse=True)
+    n_q = np.bincount(inv).astype(float)
+    d = np.bincount(inv, weights=hit) / n_q
+    x = np.array([dcov[v] for v in vids])
+
+    def fit(d, x, w):
+        X = np.stack([np.ones_like(x), x], 1) * np.sqrt(w)[:, None]
+        a, b = np.linalg.lstsq(X, d * np.sqrt(w), rcond=None)[0]
+        return 100 * a, 100 * b
+
+    a, b = fit(d, x, n_q)
+    idx = np.random.default_rng(seed).integers(0, len(vids), size=(n_boot, len(vids)))
+    boots = np.array([fit(d[i], x[i], n_q[i]) for i in idx])
+    lo, hi = np.percentile(boots, [2.5, 97.5], axis=0)
+    return {"R@1 A - B": 100 * hit.mean(), "Δcov mean (điểm %)": 100 * x.mean(), "Δcov std": 100 * x.std(),
+            "a (Δcov = 0)": a, "CI a": f"[{lo[0]:+.2f}, {hi[0]:+.2f}]",
+            "b (mỗi 10% Δcov)": b / 10, "CI b (mỗi 10%)": f"[{lo[1] / 10:+.2f}, {hi[1] / 10:+.2f}]"}
+
+
 def table(cache_dir, parts: dict[str, str], splits, pairs=(), n_boot: int = 1000, seed: int = 0):
     """Rows of ``evaluate_partition`` and paired bootstraps by video, the table every notebook builds.
 
