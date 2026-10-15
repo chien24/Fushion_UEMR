@@ -23,6 +23,8 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+import numpy as np
+
 from .partitions_uemr import _git_commit, sha256
 
 SEGMENTS = "segments_pred.jsonl"
@@ -116,3 +118,20 @@ def hash_of(uniav_dir) -> str:
     if "hash8" not in blob:
         raise ValueError(f"{uniav_dir}/SOURCE.json has no hash8: not written by uniav_version.install")
     return blob["hash8"]
+
+
+def z_overrun(z_dir, durations: dict[str, float], tol: float = 1.0) -> list[dict]:
+    """Videos whose Z time axis runs past the mp4: ``max(t_sec) > duration + tol`` (feature file longer than the
+    mp4, e.g. ``wii9jNiNl9Y``). A video without a Z file is reported with ``t_sec max = None``."""
+    out = []
+    for v in sorted(durations):
+        p = Path(z_dir) / f"{v}.npz"
+        if not p.is_file():
+            out.append({"video_id": v, "duration": durations[v], "t_sec max": None, "over (s)": None})
+            continue
+        with np.load(p) as z:
+            last = float(z["t_sec"].max())
+        if last > durations[v] + tol:
+            out.append({"video_id": v, "duration": durations[v], "t_sec max": round(last, 2),
+                        "over (s)": round(last - durations[v], 2)})
+    return out

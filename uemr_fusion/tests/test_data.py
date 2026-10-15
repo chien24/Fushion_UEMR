@@ -81,3 +81,17 @@ def test_fusion_split(fusion_cache):
     assert t["emb"].shape == (16, 16) and set(t["video_id"]) == set(ds.video_ids)
     g = FusionSplit(fusion_cache, "dev", "global")
     assert g.E.shape == (3, 1, 16)
+
+
+def test_attention_maps(fusion_cache):
+    import torch
+    from uemr_fusion.evaluate import attention_maps
+    from uemr_fusion.model import ContextFusion, FusionConfig
+    ds = FusionSplit(fusion_cache, "dev", "uniav_pred")
+    m = ContextFusion(FusionConfig(d=ds.d, d_h=8, heads=4, ff=32, pos_hidden=8))
+    maps = attention_maps(m, ds, [0, 2])
+    assert [r["video_id"] for r in maps] == [ds.video_ids[0], ds.video_ids[2]]
+    for r, v in zip(maps, (0, 2)):
+        assert r["attn"].shape == (int(ds.kmask[v].sum()), len(r["t_sec"])) == (len(r["segs"]), 256)
+        assert abs(r["attn"].sum(1) - 1).max() < 1e-5
+    assert m.training and not m.keep_attn and m.last_attn is None        # state restored

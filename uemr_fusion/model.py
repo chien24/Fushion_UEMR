@@ -82,6 +82,8 @@ class ContextFusion(nn.Module):
             self.inter = nn.TransformerEncoderLayer(d, h, cfg.ff, cfg.dropout, batch_first=True)
         self.out = nn.Linear(d, cfg.d)
         self.alpha = nn.Parameter(torch.zeros(1))
+        self.keep_attn = False   # True: step 1 keeps its weights in ``last_attn`` [B, H, K, T] (qualitative plots)
+        self.last_attn = None
 
     # ------------------------------------------------------------------ #
     def cross(self, e, segs, z, t_sec, duration):
@@ -101,6 +103,8 @@ class ContextFusion(nn.Module):
         logit = logit + torch.gather(lr, -1, rel[:, None].expand(B, H, K, T))
         logit = (logit / math.sqrt(dh)).masked_fill(~win[:, None], float("-inf"))
         a = logit.softmax(-1)
+        if self.keep_attn:
+            self.last_attn = a.detach()
         out = torch.einsum("bhkt,bthd->bkhd", a, vz)
         ar = torch.einsum("bhkt,bktr->bhkr", a, F.one_hot(rel, 3).to(a.dtype))       # attention mass per rel id
         out = out + torch.einsum("bhkr,rhd->bkhd", ar, vr)

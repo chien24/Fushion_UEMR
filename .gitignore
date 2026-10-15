@@ -23,3 +23,6 @@ notebooks/
 
 # Local docs (not pushed)
 docs/
+
+# Files archived by docs/CLEANUP_PLAN.md (not in git)
+_archive/

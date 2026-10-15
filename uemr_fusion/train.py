@@ -205,7 +205,7 @@ def main(argv=None) -> int:
         alpha = float(model.alpha.detach().cpu())
         row = {"epoch": epoch, "step": step, **{k: v / len(batches) for k, v in acc.items() if k != "n_evt"},
                "evt captions/batch": acc["n_evt"] / len(batches), "dev": m, "alpha": alpha,
-               "tau": float(1 / log_inv_tau.exp()), "lr": sched.get_last_lr()[0], "sec": round(time.time() - t0, 1)}
+               "tau": float(1 / log_inv_tau.detach().exp()), "lr": sched.get_last_lr()[0], "sec": round(time.time() - t0, 1)}
         with open(hist, "a", encoding="utf-8") as f:
             f.write(json.dumps(row) + "\n")
         mark = ""

@@ -118,17 +118,19 @@
     "metrics": ["R@1", "R@5", "R@10", "MedR", "MnR", "VCMR R@1 (tIoU.5)", "mom@.5|top1"],
     "rank": "strict: 1 + #(score > positive)",
     "bootstrap": {"n": 1000, "seed": 0, "unit": "video", "ci": 95},
+    "miss_tiou": 0.3,
+    "miss_tiou_note": "a GT event is missed by a partition when no segment of its video reaches this tIoU",
     "val_rule": "val is scored only in the final run; no decision is made on val"
   },
 
   "reference_current_uniav": {
     "note": "regression targets of uemr_final_AZ with UNIAV_SOURCE=old (docs/UEMR_TONG_KET.md)",
-    "val394_R@1_b": {"global": 8.32, "event_single": 10.30, "uni_chunk": 27.16, "uni_M": 18.02, "rand_M": 16.17,
+    "val394_R@1_b": {"global": 8.32, "event_single": 10.30, "event_single_pred": 9.24, "uni_chunk": 27.16, "uni_M": 18.02, "rand_M": 16.17,
                      "kmedoids_M": 14.19, "uniav_pred": 24.88, "gt": 37.52, "uni_M_gt": 18.91, "uniav_shift": 17.36,
                      "gt_shift": 17.72, "uniav_pred+uni_chunk": 29.77},
-    "all498_R@1_b": {"global": 6.93, "event_single": 8.65, "uni_chunk": 24.36, "uni_M": 16.20, "rand_M": 14.39,
+    "all498_R@1_b": {"global": 6.93, "event_single": 8.65, "event_single_pred": 8.22, "uni_chunk": 24.36, "uni_M": 16.20, "rand_M": 14.39,
                      "kmedoids_M": 12.41, "uniav_pred": 22.67, "gt": 34.16, "uni_M_gt": 16.60},
-    "val394_R@1_a_pt": {"global": 7.89, "uni_M": 15.15, "uniav_pred": 18.94, "gt": 25.31},
+    "val394_R@1_a_pt": {"global": 7.89, "event_single": 10.66, "event_single_pred": 9.60, "uni_M": 15.15, "uniav_pred": 18.94, "gt": 25.31},
     "dev_R@1_b": {"uniav_pred": 49.68},
     "p5_val394_R@1": {"gt_noise_09": 36.73, "gt_noise_07": 34.29, "gt_noise_05": 28.42, "gt_noise_03": 20.66},
     "exp5_beta": 0.01,

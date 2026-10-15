@@ -53,16 +53,35 @@ def run_detection(cfg: Config, pipe, records: dict[str, FeatureRecord], splits: 
     t0 = time.time()
     for i, vid in enumerate(todo, 1):
         rec = records[vid]
+        t1 = time.time()
         visual, audio = load_arrays(rec, pipe.spec)
-        out = detect_features(pipe, visual, audio, rec.duration)
-        row = {"video_id": vid, "split": splits.get(vid, ""), "duration": out["duration"], "n": out["n"],
-               "feature_source": rec.source, "run": pipe.run, "time_params": tp, "proposals": out["proposals"]}
-        append_jsonl(cfg.raw_path, [row])
+        t2 = time.time()
+        out = detect_features(pipe, visual, audio, rec.duration)     # ends on CPU values: no CUDA sync needed
+        t3 = time.time()
         if cfg.save_z:
             save_z(cfg.z_dir / f"{vid}.npz", out["z0"], out["n"], out["duration"], rec.source, pipe.run, tp)
+        row = {"video_id": vid, "split": splits.get(vid, ""), "duration": out["duration"], "n": out["n"],
+               "feature_source": rec.source, "run": pipe.run, "time_params": tp, "proposals": out["proposals"],
+               "sec": {"load_features": round(t2 - t1, 4), "detect": round(t3 - t2, 4),
+                       "save_z": round(time.time() - t3, 4), "device": str(pipe.device)}}
+        append_jsonl(cfg.raw_path, [row])
         done[vid] = row
         if i <= 3 or i % 100 == 0 or i == len(todo):
             el = time.time() - t0
             print(f"[detect] {i}/{len(todo)} {vid}: n={out['n']} {len(out['proposals'])} proposals "
                   f"| {el / i:.2f} s/video", flush=True)
     return {v: done[v] for v in records if v in done}
+
+
+def timing(raw: dict[str, dict]) -> dict:
+    """Mean seconds per video of the runs that recorded them (``sec`` of each raw record): loading the features,
+    the detector (GPU), writing Z. Feature extraction from mp4 (source ``extract``) is timed by ``features``."""
+    secs = [r["sec"] for r in raw.values() if "sec" in r]
+    if not secs:
+        return {"videos": 0}
+    out = {"videos": len(secs), "device": secs[0].get("device")}
+    for k in ("load_features", "detect", "save_z"):
+        out[f"{k} s/video"] = sum(s[k] for s in secs) / len(secs)
+    out["detect per minute of video (s)"] = sum(s["detect"] for s in secs) / sum(
+        r["duration"] for r in raw.values() if "sec" in r) * 60
+    return out

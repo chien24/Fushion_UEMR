@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import time
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -169,3 +171,61 @@ def collect(cfg, prepared: dict, allow_missing: bool = False) -> dict:
     (out / "meta.json").write_text(json.dumps(meta, indent=1, ensure_ascii=False), encoding="utf-8")
     print(f"[collect] events: {evt} | segments: {seg} | text: {txt} -> {out}")
     return meta
+
+
+# --------------------------------------------------------------------------- #
+# Local copies of big npz files (Drive FUSE)                                  #
+# --------------------------------------------------------------------------- #
+
+def _partitions(path) -> set[str] | None:
+    """Partitions of a ``segments.npz``, None when the file is missing or not a readable zip."""
+    if not zipfile.is_zipfile(path):
+        return None
+    with np.load(path) as blob:
+        return set(blob["partition"].tolist())
+
+
+def local_npz(src_dir, dst_dir, files=("segments.npz", "text.npz"), need=(), rebuild=None) -> Path:
+    """Copy the cache files to local disk and check them; returns ``dst_dir``.
+
+    ``np.load`` on Drive has returned a broken file (BadZipFile, P6) and a stale one without the partitions just
+    written (P5) after an overwrite, so every big npz is read from a local copy whose content is checked: each
+    file must be a zip, and ``segments.npz`` must hold every partition of ``need``. A bad ``segments.npz`` is
+    rebuilt by ``rebuild(path)`` (``rebuilder(cfg)``: from the ``raw/av`` store) and copied back to ``src_dir``;
+    without ``rebuild`` it raises.
+    """
+    src, dst = Path(src_dir), Path(dst_dir)
+    dst.mkdir(parents=True, exist_ok=True)
+    for f in files:
+        local = dst / f
+        if not zipfile.is_zipfile(local) and (src / f).is_file():
+            shutil.copy2(src / f, local)
+        if f != "segments.npz":
+            if not zipfile.is_zipfile(local):
+                raise MissingEmbeddings(f"{src / f} is missing or broken")
+            continue
+        have = _partitions(local)
+        missing = None if have is None else sorted(set(need) - have)
+        if have is not None and not missing:
+            continue
+        why = "broken or missing" if have is None else f"without {missing} (stale copy)"
+        if rebuild is None:
+            raise MissingEmbeddings(f"{src / f} is {why}; pass rebuild=rebuilder(cfg)")
+        print(f"[local_npz] {src / f} is {why} -> rebuilt from the encoder store")
+        local.unlink(missing_ok=True)
+        rebuild(local)
+        have = _partitions(local)
+        missing = sorted(set(need) - (have or set()))
+        if have is None or missing:
+            raise MissingEmbeddings(f"rebuilt {local} is broken or lacks {missing}: encode them first")
+        shutil.copy2(local, src / f)
+    return dst
+
+
+def rebuilder(cfg):
+    """``rebuild`` callable for ``local_npz``: ``segments.npz`` of ``cfg``'s partitions from its ``raw/av`` store."""
+    def rebuild(path):
+        from .manifest import prepare
+
+        print("[local_npz]", collect_segments(prepare(cfg, write=False, verbose=False)["rows"], cfg.av_store, Path(path)))
+    return rebuild

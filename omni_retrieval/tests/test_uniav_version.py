@@ -59,3 +59,13 @@ def test_config_variant_paths():
     assert str(new.out_dir).replace("\\", "/") == "/c/ft/ab12cd34"
     assert new.av_store == old.av_store and new.subset_path == old.subset_path        # raw store shared
     assert new.segs_todo.name == "segs_todo_ft_ab12cd34.jsonl"
+
+
+def test_z_overrun(tmp_path):
+    from omni_retrieval.uniav_version import z_overrun
+    for v, n in (("ok", 100), ("long", 344)):
+        np.savez(tmp_path / f"{v}.npz", z=np.zeros((256, 4), np.float16),
+                 t_sec=((np.arange(256) + 0.5) * n / 256).astype(np.float32))
+    rows = z_overrun(tmp_path, {"ok": 99.5, "long": 333.5, "gone": 50.0})
+    assert [r["video_id"] for r in rows] == ["gone", "long"]                 # 99.8 <= 99.5 + 1 is fine
+    assert rows[0]["t_sec max"] is None and rows[1]["over (s)"] == pytest.approx(343.33 - 333.5, abs=0.01)

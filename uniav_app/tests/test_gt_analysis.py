@@ -92,3 +92,15 @@ def test_theta_sweep_counts_fall_with_theta():
     assert [r["mean_K_pred"] for r in rows] == [8, 5, 1]
     assert rows[1]["R@0.5"] == pytest.approx(1.0) and rows[1]["P@0.5"] == pytest.approx(3 / 5)
     assert np.isclose(rows[2]["AR@K_GT@0.5"], 1 / 3)
+
+
+def test_detect_timing_summary():
+    from uniav_app.detect import timing
+    raw = {"a": {"duration": 120.0, "sec": {"load_features": 0.1, "detect": 0.4, "save_z": 0.2, "device": "cuda"}},
+           "b": {"duration": 60.0, "sec": {"load_features": 0.3, "detect": 0.2, "save_z": 0.0, "device": "cuda"}},
+           "old": {"duration": 999.0}}                                      # a record of an older run: no timings
+    t = timing(raw)
+    assert (t["videos"], t["device"]) == (2, "cuda")
+    assert t["detect s/video"] == pytest.approx(0.3) and t["load_features s/video"] == pytest.approx(0.2)
+    assert t["detect per minute of video (s)"] == pytest.approx(0.6 / 180 * 60)
+    assert timing({"old": {"duration": 1.0}}) == {"videos": 0}

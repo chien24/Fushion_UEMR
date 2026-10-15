@@ -147,6 +147,27 @@ def paired_bootstrap(rank_a, rank_b, k: int = 1, n_boot: int = 1000, seed: int =
             "n_boot": n_boot}
 
 
+def table(cache_dir, parts: dict[str, str], splits, pairs=(), n_boot: int = 1000, seed: int = 0):
+    """Rows of ``evaluate_partition`` and paired bootstraps by video, the table every notebook builds.
+
+    ``parts``: ``{partition: label}``; ``splits``: ``[(name, text, videos)]`` (``videos`` None = every video);
+    ``pairs``: ``[(a, b)]`` partition names, R@1(a) - R@1(b). Returns ``(rows, boots)`` as lists of dicts.
+    """
+    rows, boots = [], []
+    for split, text, videos in splits:
+        ranks = {}
+        for p, label in parts.items():
+            idx = load_index(cache_dir, p, videos)
+            rows.append({**evaluate_partition(idx, text), "split": split, "partition": label})
+            ranks[p] = video_ranks(idx, text)["ranks"]
+        for a, b in pairs:
+            bs = paired_bootstrap(ranks[a], ranks[b], 1, n_boot, seed, "video", text["video_id"])
+            boots.append({"split": split, "A": parts[a], "B": parts[b], "A - B": bs["diff"],
+                          "CI (video)": f"[{bs['ci_low']:+.2f}, {bs['ci_high']:+.2f}]",
+                          "ci_low": bs["ci_low"], "ci_high": bs["ci_high"], "p(diff<=0)": bs["p(diff<=0)"]})
+    return rows, boots
+
+
 COLUMNS = ("partition", "vec/video", "R@1", "R@5", "R@10", "MedR", "MnR", "mom@.5|top1",
            "VCMR R@1 (tIoU.5)", "coverage")
 

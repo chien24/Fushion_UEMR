@@ -12,7 +12,7 @@ matplotlib.use("Agg")
 
 from omni_retrieval.efficiency import efficiency_row, index_bytes, int8_index, quantize_int8  # noqa: E402
 from omni_retrieval.evaluate import evaluate_partition, load_index, load_text, video_ranks  # noqa: E402
-from omni_retrieval.qualitative import flip_groups, profile, run  # noqa: E402
+from omni_retrieval.qualitative import flip_groups, jaccard, profile, run, same_video_wrong_event  # noqa: E402
 from omni_retrieval.search import tiou  # noqa: E402
 
 D = 16
@@ -114,9 +114,24 @@ def test_qualitative_run(cache):
     assert groups["R6 đúng, R3 sai"].sum() == ((df["rank R6"] == 1) & (df["rank R3"] > 1)).sum()
     prof = profile(df, groups)
     assert prof.iloc[0]["queries"] == 9 and len(prof) == 7
-    for name in ("per_query", "profile", "r6_beats_r3", "r6_beats_r0", "r0_r2_beat_r6", "near_dup_10_29"):
+    for name in ("per_query", "profile", "r6_beats_r3", "r6_beats_r0", "r0_r2_beat_r6", "near_dup_10_29",
+                 "same_video_wrong_event"):
         assert (cache / "qual" / f"qual_{name}.csv").is_file(), name
     assert 1 <= len(out["figures"]) <= 3 and all(os.path.isfile(f) for f in out["figures"])
     nd = out["near_dup_10_29"]
     if len(nd):
         assert set(nd.top) <= {1, 2, 3} and nd["caption GT gần argmax nhất"].str.startswith("step").all()
+
+
+def test_same_video_wrong_event(cache):
+    assert jaccard("Stir the onions in the pan", "stir onions and garlic") == pytest.approx(2 / 4)   # stir, onions
+    assert jaccard("", "") == 0.0
+    # A_0 found at the right video (rank 1) but its argmax is step 1 of A: a "same video, other event" error
+    df = pd.DataFrame([{"caption_id": "A_0", "video_id": "A", "sentence": "step 0 of A", "gt_ts": 0.0, "gt_te": 10.0,
+                        "rank R7": 1, "ts R7": 12.0, "te R7": 30.0, "moment tIoU R7": 0.0},
+                       {"caption_id": "A_1", "video_id": "A", "sentence": "step 1 of A", "gt_ts": 12.0, "gt_te": 30.0,
+                        "rank R7": 1, "ts R7": 12.0, "te R7": 30.0, "moment tIoU R7": 1.0}])   # right event: not kept
+    out = same_video_wrong_event(cache, df, parts=("R7",))
+    assert out.caption_id.tolist() == ["A_0"]
+    r = out.iloc[0]
+    assert (r["caption gần argmax nhất"], r["tIoU argmax với caption đó"], r["jaccard"]) == ("step 1 of A", 1.0, 1.0)

@@ -107,3 +107,19 @@ def test_ablation_flags_build_and_run():
         torch.testing.assert_close(c.norm(dim=-1), torch.ones(2, 3), atol=1e-5, rtol=0)
         # unit-norm residual: e moves by at most alpha, so cos(c, e) >= sqrt(1 - alpha^2)
         assert (c * x["E"]).sum(-1).min().item() >= math.sqrt(1 - 0.5 ** 2) - 1e-5
+
+
+def test_attention_weights_kept_only_on_request():
+    m = ContextFusion(small(delta=5.0)).eval()
+    x = inputs()
+    with torch.no_grad():
+        c0 = m(**x)
+        assert m.last_attn is None                                       # off by default (training)
+        m.keep_attn = True
+        c1 = m(**x)
+    torch.testing.assert_close(c0, c1)                                   # keeping them changes nothing
+    a = m.last_attn                                                      # [B, H, K, T]
+    win, _ = windows(x["segs"], x["t_sec"], x["duration"], 5.0)
+    assert a.shape == (2, 4, 3, 256)
+    torch.testing.assert_close(a.sum(-1), torch.ones(2, 4, 3))
+    assert (a.masked_select(~win[:, None].expand_as(a)) == 0).all()      # no weight outside [ts - delta, te + delta]

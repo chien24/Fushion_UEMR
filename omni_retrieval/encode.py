@@ -257,7 +257,7 @@ class ChunkWriter:
 
 
 def encode_av(model, processor, records_path: Path, writer: ChunkWriter, device: str,
-              dtype: str, num_workers: int) -> dict:
+              dtype: str, num_workers: int, silence: bool = False) -> dict:
     import torch
     from torch.utils.data import DataLoader
     from tqdm.auto import tqdm
@@ -265,6 +265,12 @@ def encode_av(model, processor, records_path: Path, writer: ChunkWriter, device:
     om = omni_modules()
     torch_dtype = {"bfloat16": torch.bfloat16, "float16": torch.float16}.get(dtype, torch.float32)
     data_args = EvalDataArgs(str(records_path), processor)
+    if silence:
+        # Exp 4 (visual only): every clip gets the 8 s of silence the loader itself uses when the audio cannot be
+        # cut. checkpoint-1948 never saw it in training (pair InfoNCE on video + audio): out-of-distribution input.
+        import qwenvl.data.data_qwen as dq
+        n_wav = int(data_args.fixed_audio_duration * 16000)
+        dq.load_audio_segment = lambda *a, **k: np.zeros(n_wav, np.float32)
     # run_test only changes error handling here: a record that fails to load comes back
     # as None (logged below) instead of being replaced by a random other sample.
     data_args.run_test = True
@@ -314,6 +320,8 @@ def main(argv=None) -> int:
     p.add_argument("--chunk-size", type=int, default=200, help="embeddings per chunk file")
     p.add_argument("--limit", type=int, default=None, help="encode only the first N pending records")
     p.add_argument("--timing-out", default=None, help="write timing JSON here")
+    p.add_argument("--silence", action="store_true",
+                   help="Exp 4: replace every clip's audio by silence (out of distribution); use a separate --store")
     a = p.parse_args(argv)
 
     if a.video_root:
@@ -339,7 +347,7 @@ def main(argv=None) -> int:
     load_sec = time.time() - t0
     writer = ChunkWriter(store, a.modality, a.chunk_size)
     meta = {"adapter": a.adapter, "base_model": a.base_model, "beats_path": a.beats_path,
-            "dtype": a.dtype, "preprocessing": preprocessing_params(processor)}
+            "dtype": a.dtype, "preprocessing": preprocessing_params(processor), "audio": "silence" if a.silence else "mp4"}
     (store / "encoder_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
     t1 = time.time()
@@ -348,7 +356,7 @@ def main(argv=None) -> int:
         with open(pending_path, "w", encoding="utf-8") as f:
             for r in pending:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
-        stats = encode_av(model, processor, pending_path, writer, a.device, a.dtype, a.num_workers)
+        stats = encode_av(model, processor, pending_path, writer, a.device, a.dtype, a.num_workers, a.silence)
     else:
         vecs = encode_texts(model, processor.tokenizer, [r["text"] for r in pending], a.batch_size)
         for r, v in zip(pending, vecs):

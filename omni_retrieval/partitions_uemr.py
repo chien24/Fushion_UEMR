@@ -52,12 +52,13 @@ from pathlib import Path
 import numpy as np
 
 from .partitions import MIN_SEG_SEC, uniform
+from .protocol import P
 from .search import tiou_vec
 
-D_MIN = 2.0
-CHUNK_SEC = 14.0
-HALF_WINDOW = 1.0
-MAX_ITER = 100
+D_MIN = float(P["partitions"]["d_min"])
+CHUNK_SEC = float(P["partitions"]["uni_chunk_sec"])
+HALF_WINDOW = float(P["partitions"]["kmedoids_half_window"])
+MAX_ITER = int(P["partitions"]["kmedoids_max_iter"])
 NAMES = ("uniav_pred", "uni_M", "rand_M", "kmedoids_M", "uni_chunk")
 K_PRED_NAMES = ("uni_M", "rand_M", "kmedoids_M")       # must have exactly K_pred segments
 CONTIGUOUS = ("uni_chunk", "uni_M", "rand_M")          # must tile [0, duration]
@@ -354,9 +355,10 @@ def run_controls(out_dir, subset_path, seed: int = 0) -> list[dict]:
 # Boundary noise (P5 / Exp 3, RQ4)                                            #
 # --------------------------------------------------------------------------- #
 
-NOISE_TARGETS = (0.9, 0.7, 0.5, 0.3)
-NOISE_TOL = 0.02
-SIGMA_MAX = 16.0
+NOISE_TARGETS = tuple(P["exp3_noise"]["targets"])
+NOISE_TOL = float(P["exp3_noise"]["tol"])
+SIGMA_MAX = float(P["exp3_noise"]["sigma_max"])
+MISS_TIOU = float(P["eval"]["miss_tiou"])
 # partitions whose mean best tIoU goes on the P5 plot next to the noise curve
 TIOU_REFERENCE = ("gt", "uni_M_gt", "uniav_pred", "uni_M", "rand_M", "kmedoids_M", "uni_chunk", "global",
                   "uniav_shift", "gt_shift")
@@ -403,6 +405,11 @@ def best_tiou(part: dict, gt: dict) -> np.ndarray:
     return np.array(out)
 
 
+def miss_rate(part: dict, gt: dict, thr: float = MISS_TIOU) -> float:
+    """% of GT events that no segment of ``part`` covers with tIoU >= ``thr`` (UniAV missed the event)."""
+    return 100 * float((best_tiou(part, gt) < thr).mean())
+
+
 def calibrate_sigma(gt: dict, durations: dict, dirs: dict, target: float, d_min: float = D_MIN,
                     tol: float = NOISE_TOL, iters: int = 40) -> tuple[float, float, dict]:
     """Bisection on sigma for mean best tIoU = ``target``, measured on the clipped, d_min, rounded segments.
@@ -428,6 +435,28 @@ def calibrate_sigma(gt: dict, durations: dict, dirs: dict, target: float, d_min:
     if abs(achieved - target) > tol:
         raise ValueError(f"target {target}: sigma {sigma:.4f} gives {achieved:.4f} (tolerance {tol})")
     return sigma, achieved, part
+
+
+def equivalent_tiou(points, r1: float) -> float:
+    """tIoU at which the noisy-GT curve gives R@1 ``r1``: linear between the levels, extended with the slope of the
+    lowest (or highest) segment outside them. ``points`` = ``[(tiou, R@1)]`` in any order (the P5 bug was a list
+    not sorted by tIoU)."""
+    pts = sorted(points)
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        if r1 <= y1 or (x1, y1) == pts[-1]:
+            return x0 + (r1 - y0) * (x1 - x0) / (y1 - y0)
+    raise ValueError("need at least two points")
+
+
+def significant_down_to(levels) -> float | None:
+    """Lowest tIoU of the run of levels, from the top, whose CI of R@1 minus the baseline stays above 0.
+    ``levels`` = ``[(tiou, ci_low)]`` in any order; None when even the top level is not significant."""
+    out = None
+    for t, lo in sorted(levels, reverse=True):
+        if lo <= 0:
+            break
+        out = t
+    return out
 
 
 def build_noise(parts_dir, durations: dict, seed: int = 0, targets=NOISE_TARGETS,

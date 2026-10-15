@@ -99,3 +99,22 @@ def test_defaults_are_the_frozen_config():
     assert (a.tau_s, a.lam, a.use_global) == (0.05, 0.5, True)
     assert parse_args(["--cache", "c", "--out", "o", "--no-global"]).use_global is False
     assert parse_args(["--cache", "c", "--out", "o", "--use-global"]).use_global is True
+
+
+def test_defaults_and_exp2_flags_match_final_protocol():
+    """Every default of the CLI equals configs/final_protocol.json; the Exp 2 flags give the P6 settings."""
+    from omni_retrieval.protocol import P
+    f = P["fusion"]
+    a = vars(parse_args(["--cache", "c", "--out", "o"]))
+    keys = ("d_h", "heads", "dropout", "ff", "delta", "tau", "tau_s", "lam", "use_global", "lr", "alpha_lr", "wd",
+            "warmup", "batch", "epochs", "patience")
+    assert {k: a[k] for k in keys} == {k: f[k] for k in keys}
+    assert a["seed"] == f["seeds"][0] and a["use_cross"] and a["use_self"] and not a["shuffle_z"]
+    want = {"F_cross_only": dict(use_self=False, lam=0, use_global=False), "D1_ts0.05": dict(lam=0, use_global=False),
+            "D2": dict(lam=0.5, use_global=False), "D3": dict(lam=0.5, use_global=True),
+            "F_shuffle_z": dict(shuffle_z=True, use_global=True), "F_delta0": dict(delta=0, use_global=True)}
+    assert set(f["exp2_runs"]) == set(want)
+    for run, flags in f["exp2_runs"].items():
+        r = vars(parse_args(["--cache", "c", "--out", "o", *flags]))
+        assert {k: r[k] for k in want[run]} == want[run], run
+        assert r["tau_s"] == f["tau_s"], run

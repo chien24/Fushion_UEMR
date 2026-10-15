@@ -102,6 +102,20 @@ def test_pooled_partitions_load(tmp_path):
     assert row["R@1"] == 100 and row["VCMR R@1 (tIoU.5)"] != row["VCMR R@1 (tIoU.5)"]   # NaN: no moment
 
 
+def test_table_rows_and_pairs(tmp_path):
+    from omni_retrieval.evaluate import table
+    emb = np.stack([unit(1, 0, 0), unit(0, 1, 0), unit(0, 0, 1), unit(1, 1, 0)])
+    np.savez(tmp_path / "segments.npz", partition=np.array(["gt", "gt", "uniav_pred", "uniav_pred"]),
+             video_id=np.array(["A", "B", "A", "B"]), ts=np.zeros(4, np.float32), te=np.full(4, 10, np.float32), emb=emb)
+    text = {"emb": np.stack([unit(1, 0, 0), unit(0, 1, 0)]), "video_id": np.array(["A", "B"]),
+            "gt_ts": np.zeros(2, np.float32), "gt_te": np.full(2, 10, np.float32)}
+    rows, boots = table(tmp_path, {"gt": "R7", "uniav_pred": "R6"}, [("val", text, None)], [("gt", "uniav_pred")],
+                        n_boot=200)
+    r1 = {r["partition"]: r["R@1"] for r in rows}
+    assert r1 == {"R7": 100.0, "R6": 50.0}                      # R6: B's (1,1,0) beats A's (0,0,1) for query A
+    assert boots[0]["A - B"] == pytest.approx(50.0) and boots[0]["A"] == "R7" and boots[0]["split"] == "val"
+
+
 def test_rank_metrics_hand_computed():
     m = rank_metrics(np.array([1, 3, 12]))
     assert m["R@1"] == pytest.approx(100 / 3)

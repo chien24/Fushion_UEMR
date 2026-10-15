@@ -9,6 +9,8 @@ partition folder, so the same call reruns on a new UniAV (``omni_cache/ft/<hash>
 * ``profile``        those features averaged over flip groups (R6 right and R0 wrong, R0 right and R6 wrong, ...)
 * ``examples``       R6 beats R3 the most; R0 / R2 beat R6; near-duplicate queries (10-29) with the top videos
                      of R6 and the GT caption closest to each argmax segment
+* ``same_video_wrong_event``  right video, wrong event (R7, R6): the GT caption at the argmax segment and its word
+                     overlap with the query (repeated steps of one video, UEMR_FINAL §8)
 * ``plot_timeline``  GT / R6 / R3 segments of one video, the query's GT event and both argmax segments
 
     from omni_retrieval.qualitative import run
@@ -25,13 +27,12 @@ import numpy as np
 import pandas as pd
 
 from .evaluate import load_index, load_text, video_ranks
-from .partitions_uemr import read_durations
+from .partitions_uemr import MISS_TIOU, read_durations
 from .search import EventIndex, tiou_vec
 
 PARTS = ("global", "uni_chunk", "uni_M", "uniav_pred", "gt")
 SHORT = {"global": "R0", "uni_chunk": "R2", "uni_M": "R3", "uniav_pred": "R6", "gt": "R7"}
 DUP_COLUMN = "near-duplicates (other videos)"
-MISS_TIOU = 0.3
 
 
 def _cover(segs, ts: float, te: float) -> float:
@@ -135,6 +136,39 @@ def near_dup_examples(db_dir, df: pd.DataFrame, videos, n: int = 5, lo: int = 10
     return pd.DataFrame(rows)
 
 
+STOP = {"the", "and", "with", "into", "onto", "some", "then", "for", "from", "until", "that", "this", "them", "over"}
+
+
+def _words(s: str) -> set[str]:
+    return {w for w in "".join(c if c.isalnum() else " " for c in s.lower()).split() if len(w) > 2 and w not in STOP}
+
+
+def jaccard(a: str, b: str) -> float:
+    wa, wb = _words(a), _words(b)
+    return len(wa & wb) / len(wa | wb) if wa | wb else 0.0
+
+
+def same_video_wrong_event(db_dir, df: pd.DataFrame, parts=("R7", "R6"), thr: float = 0.5) -> pd.DataFrame:
+    """Right video at rank 1 but the argmax segment misses the query's GT event (moment tIoU < ``thr``): the step
+    found elsewhere in the same video. ``caption gần argmax nhất`` = GT caption of that video closest (tIoU) to the
+    argmax segment (another GT event for R7); a high word ``jaccard`` with the query = a repeated step (stir twice)."""
+    ev = EventIndex.load(db_dir)
+    rows = []
+    for s in parts:
+        sel = df[(df[f"rank {s}"] == 1) & (df[f"moment tIoU {s}"] < thr)]
+        for _, r in sel.iterrows():
+            m = np.flatnonzero(ev.video_id == r.video_id)
+            t = tiou_vec(ev.ts[m], ev.te[m], r[f"ts {s}"], r[f"te {s}"])
+            j = m[int(np.argmax(t))]
+            rows.append({"partition": s, "caption_id": r.caption_id, "video_id": r.video_id, "query": r.sentence,
+                         "gt": f"[{r.gt_ts:.1f}, {r.gt_te:.1f}]", "argmax": f"[{r[f'ts {s}']:.1f}, {r[f'te {s}']:.1f}]",
+                         "moment tIoU": round(float(r[f"moment tIoU {s}"]), 3),
+                         "caption gần argmax nhất": str(ev.caption[j]), "tIoU argmax với caption đó": round(float(t.max()), 3),
+                         "jaccard": round(jaccard(r.sentence, str(ev.caption[j])), 3)})
+    out = pd.DataFrame(rows)
+    return out.sort_values(["partition", "jaccard"], ascending=[False, False]) if len(out) else out
+
+
 def plot_timeline(ax, r, segs: dict[str, dict], duration: float):
     """Rows GT / R6 / R3 of video ``r.video_id``; the query's GT event in green, each argmax segment outlined."""
     v = r.video_id
@@ -179,7 +213,8 @@ def run(db_dir, videos, parts_dir, subset_path, dup_csv, out_dir, n_examples: in
     tables = {"per_query": df, "profile": profile(df, flip_groups(df)),
               "r6_beats_r3": r6_beats(df, "R3", n_examples), "r6_beats_r0": r6_beats(df, "R0", n_examples),
               "r0_r2_beat_r6": beats_r6(df, ("R0", "R2"), n_examples),
-              "near_dup_10_29": near_dup_examples(db_dir, df, videos)}
+              "near_dup_10_29": near_dup_examples(db_dir, df, videos),
+              "same_video_wrong_event": same_video_wrong_event(db_dir, df)}
     for name, t in tables.items():
         t.to_csv(out / f"qual_{name}.csv", index=False)
     # timelines: R6 beats R3 (one per video) then R0 / R2 beat R6

@@ -1,6 +1,7 @@
 """Scoring of fused vectors with the P4 code (``omni_retrieval.search.SegmentIndex``, ``evaluate``), agg ``max``.
 
 * ``fuse``          c_i of every video of a split (eval mode, deterministic)
+* ``attention_maps`` step-1 cross-attention weights of a few videos (UEMR_FINAL §8, qualitative)
 * ``build_index``   a ``SegmentIndex`` of fused (or raw) vectors; ``use_global`` adds c_g = e_g, span [0, duration]
 * ``split_metrics`` text -> video R@k over one split's own videos (the dev check of every epoch)
 * ``final_eval``    val once: galleries 394 (val) and 498 (val + dev), column (b) from the same cache, R@1 by GT
@@ -47,6 +48,26 @@ def fuse(model, ds: FusionSplit, shuffle_z: bool = False, seed: int = 0, chunk: 
         out += [C[i, :k[i]].float().cpu().numpy() for i in range(len(vidx))]
     model.train(was)
     return out
+
+
+@torch.no_grad()
+def attention_maps(model, ds: FusionSplit, videos) -> list[dict]:
+    """Step-1 cross-attention of the video indices ``videos`` (float32, mean over heads): per video its
+    ``segs`` [K, 2], the Z time axis ``t_sec`` [T] and ``attn`` [K, T] (each row sums to 1 over its window)."""
+    was = model.training
+    model.eval()
+    model.keep_attn = True
+    try:
+        vidx = torch.as_tensor(list(videos), device=ds.device)
+        b = ds.batch(vidx)
+        model(b["E"], b["kmask"], b["segs"], b["Z"], b["t_sec"], b["duration"])
+        a = model.last_attn.float().mean(1).cpu().numpy()
+    finally:
+        model.keep_attn, model.last_attn = False, None
+        model.train(was)
+    k = b["kmask"].sum(1).tolist()
+    return [{"video_id": ds.video_ids[v], "segs": b["segs"][i, :k[i]].cpu().numpy(),
+             "t_sec": b["t_sec"][i].cpu().numpy(), "attn": a[i, :k[i]]} for i, v in enumerate(vidx.tolist())]
 
 
 def raw_vectors(ds: FusionSplit) -> list[np.ndarray]:
