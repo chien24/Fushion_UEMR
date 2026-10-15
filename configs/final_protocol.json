@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "date": "2026-10-15",
+  "doc": "docs/UEMR_FINAL_PROTOCOL.md (giải thích từng khoá, nguồn, chỗ lệch so với docs/UEMR_FINAL.md)",
+
+  "data": {
+    "dataset": "YouCook2",
+    "splits": {
+      "trainsplit": {"videos": 1002, "captions": 7787, "manifest": "train_omni_video.trainsplit.jsonl"},
+      "dev": {"videos": 104, "captions": 773, "manifest": "train_omni_video.dev.jsonl"},
+      "val": {"videos": 394, "captions": 3030, "manifest": "val_omni_video.jsonl"}
+    },
+    "events_val_dev": 3803,
+    "gallery_main": "val",
+    "gallery_aux": "all",
+    "gt_clamped_to_mp4": true
+  },
+
+  "uniav": {
+    "checkpoint": "athena.pth (run ov_E1)",
+    "seg_weights": "best_seg",
+    "z": {"layer": 0, "grid": 256, "dim": 1024, "dtype": "float16", "sec_of_grid": "t = (g + 0.5) * n / 256, n = feature rows; clip to [0, duration]"},
+    "postprocess": {
+      "theta": {"rule": "dev: mean K_pred closest to mean K_GT, tie -> smaller theta", "split": "dev",
+                "grid": [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60],
+                "value_current_uniav": 0.40},
+      "k_max": 30,
+      "d_min": 2.0,
+      "merge_tiou": 0.7,
+      "keep_at_least": 1,
+      "sort_by_time": true
+    }
+  },
+
+  "partitions": {
+    "names": {
+      "R0": "global", "R1_gt": "event_single", "R1_pred": "event_single_pred", "R2": "uni_chunk", "R3": "uni_M",
+      "R4": "rand_M", "R5": "kmedoids_M", "R6": "uniav_pred", "R7": "gt", "uni_M_gt": "uni_M_gt",
+      "uniav_shift": "uniav_shift", "gt_shift": "gt_shift", "union": "uniav_pred+uni_chunk"
+    },
+    "pooled": {"event_single": "gt", "event_single_pred": "uniav_pred"},
+    "uni_chunk_sec": 14.0,
+    "d_min": 2.0,
+    "kmedoids_half_window": 1.0,
+    "kmedoids_max_iter": 100,
+    "seed": 0,
+    "uses_uniav": ["uniav_pred", "uni_M", "rand_M", "kmedoids_M", "uniav_shift", "event_single_pred", "uniav_pred+uni_chunk"]
+  },
+
+  "exp3_noise": {
+    "targets": [0.9, 0.7, 0.5, 0.3],
+    "tol": 0.02,
+    "sigma": "bisection after clipping and d_min (not fixed)",
+    "sigma_max": 16.0,
+    "seed": 0,
+    "baseline": "uni_M_gt"
+  },
+
+  "omni": {
+    "base": "WAVE-7B + BEATs",
+    "ft": "checkpoint-1948",
+    "ft_selection": "fixed by the training schedule (last step, 2 epochs); not chosen on dev or val",
+    "pt": "YunzeLiu/OmniRetriever-7B",
+    "frames": 8,
+    "max_pixels": 50176,
+    "audio_sec": 8,
+    "audio_missing": "8 s of silence (out of distribution; counted and reported)",
+    "vector": "classify_linear head, L2-normalised",
+    "text": "last hidden state at the last token of caption + <|im_end|>, L2-normalised",
+    "sec_per_clip_a100": 0.26,
+    "columns": {"a_pt": ["global", "uni_M", "uniav_pred", "gt"], "b_ft": "all partitions"}
+  },
+
+  "scoring": {
+    "agg": "max",
+    "beta": 0.0,
+    "exp5": {"beta_grid": [0, 0.005, 0.01, 0.02, 0.05, 0.1], "beta_rule": "dev R@1, tie -> smaller beta; val scored once",
+             "aggs": [["max", {}], ["topk_mean", {"k": 2}], ["topk_mean", {"k": 3}], ["lse", {"tau": 0.01}],
+                      ["lse", {"tau": 0.02}], ["lse", {"tau": 0.05}], ["lse", {"tau": 0.1}]]}
+  },
+
+  "fusion": {
+    "config": "D3",
+    "d_h": 256,
+    "output": "c = L2norm(e + alpha * L2norm(W_u u)), alpha init 0",
+    "heads": 8,
+    "dropout": 0.1,
+    "ff": 2048,
+    "delta": 5.0,
+    "tau": 0.05,
+    "tau_s": 0.05,
+    "lam": 0.5,
+    "use_global": true,
+    "lr": 1e-4,
+    "alpha_lr": 1e-3,
+    "wd": 0.01,
+    "warmup": 0.05,
+    "schedule": "cosine",
+    "batch": 128,
+    "epochs": 30,
+    "patience": 5,
+    "epoch_rule": "dev R@1 max, tie -> earlier epoch",
+    "seeds": [0, 1, 2],
+    "partitions": ["uniav_pred", "uni_M", "global", "gt"],
+    "tau_s_grid": [0.01, 0.02, 0.05],
+    "tau_s_rule": "dev R@1 of D1 (L_vid only, no c_g)",
+    "exp2_runs_note": "CLI flags on top of the train.py defaults (= D3); P6 ran them with the old defaults, the settings are the same",
+    "exp2_runs": {"F_cross_only": ["--no-self", "--lam", "0", "--no-global"], "D1_ts0.05": ["--lam", "0", "--no-global"],
+                  "D2": ["--no-global"], "D3": [], "F_shuffle_z": ["--shuffle-z"], "F_delta0": ["--delta", "0"]},
+    "lvid_only_runs": {"flags": ["--lam", "0"], "partitions": ["uni_M", "uniav_pred", "gt"]},
+    "run_extra_fusion": false,
+    "run_extra_fusion_partitions": ["event_single_pred", "uni_chunk", "rand_M", "kmedoids_M", "uni_M_gt"],
+    "run_extra_fusion_reason": "not required: fusion ~ 0 on every partition already run (R3 +0.08, R6 +0.43, R7 +0.20; CI contain 0)",
+    "overfit_check": {"videos": 32, "steps": 200, "alpha_lr": 1e-2}
+  },
+
+  "eval": {
+    "metrics": ["R@1", "R@5", "R@10", "MedR", "MnR", "VCMR R@1 (tIoU.5)", "mom@.5|top1"],
+    "rank": "strict: 1 + #(score > positive)",
+    "bootstrap": {"n": 1000, "seed": 0, "unit": "video", "ci": 95},
+    "val_rule": "val is scored only in the final run; no decision is made on val"
+  },
+
+  "reference_current_uniav": {
+    "note": "regression targets of uemr_final_AZ with UNIAV_SOURCE=old (docs/UEMR_TONG_KET.md)",
+    "val394_R@1_b": {"global": 8.32, "event_single": 10.30, "uni_chunk": 27.16, "uni_M": 18.02, "rand_M": 16.17,
+                     "kmedoids_M": 14.19, "uniav_pred": 24.88, "gt": 37.52, "uni_M_gt": 18.91, "uniav_shift": 17.36,
+                     "gt_shift": 17.72, "uniav_pred+uni_chunk": 29.77},
+    "all498_R@1_b": {"global": 6.93, "event_single": 8.65, "uni_chunk": 24.36, "uni_M": 16.20, "rand_M": 14.39,
+                     "kmedoids_M": 12.41, "uniav_pred": 22.67, "gt": 34.16, "uni_M_gt": 16.60},
+    "val394_R@1_a_pt": {"global": 7.89, "uni_M": 15.15, "uniav_pred": 18.94, "gt": 25.31},
+    "dev_R@1_b": {"uniav_pred": 49.68},
+    "p5_val394_R@1": {"gt_noise_09": 36.73, "gt_noise_07": 34.29, "gt_noise_05": 28.42, "gt_noise_03": 20.66},
+    "exp5_beta": 0.01,
+    "exp5_val394_R@1_beta": 25.12,
+    "int8_val394_R@1_uniav_pred": 24.85,
+    "fusion_D3_val394_R@1_seeds": [25.18, 25.08, 25.68],
+    "fusion_D3_seed_tol": 0.2,
+    "theta": 0.40
+  }
+}

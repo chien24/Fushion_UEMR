@@ -20,6 +20,8 @@ from pathlib import Path
 import numpy as np
 
 AGGS = ("max", "topk_mean", "lse")
+# one vector per video = mean of a source partition: R1_gt (mean of R7) and R1_pred (mean of R6, UEMR_FINAL §5)
+POOLED = {"event_single": "gt", "event_single_pred": "uniav_pred"}
 
 
 class SegmentIndex:
@@ -44,9 +46,9 @@ class SegmentIndex:
     # ------------------------------------------------------------------ #
     @classmethod
     def load(cls, cache_dir, partition: str = "gt") -> "SegmentIndex":
-        """Load one partition from ``segments.npz``; ``event_single`` = mean-pooled ``gt``."""
-        if partition == "event_single":
-            return cls.load(cache_dir, "gt").mean_pooled("event_single")
+        """Load one partition from ``segments.npz``; a ``POOLED`` name = its source partition mean-pooled."""
+        if partition in POOLED:
+            return cls.load(cache_dir, POOLED[partition]).mean_pooled(partition)
         with np.load(Path(cache_dir) / "segments.npz") as blob:
             sel = blob["partition"] == partition
             if not sel.any():

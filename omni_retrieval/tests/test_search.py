@@ -85,6 +85,23 @@ def test_event_single_pooling(toy):
     assert (pooled.ts[0], pooled.te[0]) == (0, 20)
 
 
+def test_pooled_partitions_load(tmp_path):
+    # R1_gt pools the gt rows, R1_pred the uniav_pred rows of the same video
+    emb = np.stack([unit(1, 0, 0), unit(0, 1, 0), unit(0, 0, 1), unit(1, 1, 0)])
+    np.savez(tmp_path / "segments.npz", partition=np.array(["gt", "gt", "uniav_pred", "uniav_pred"]),
+             video_id=np.array(["A"] * 4), ts=np.array([0, 10, 0, 20], np.float32),
+             te=np.array([10, 20, 15, 30], np.float32), emb=emb)
+    gt, pred = SegmentIndex.load(tmp_path, "event_single"), SegmentIndex.load(tmp_path, "event_single_pred")
+    np.testing.assert_allclose(gt.emb[0], unit(1, 1, 0), atol=1e-6)
+    p = unit(0, 0, 1) + unit(1, 1, 0)
+    np.testing.assert_allclose(pred.emb[0], p / np.linalg.norm(p), atol=1e-6)
+    assert (pred.name, list(pred.counts), pred.ts[0], pred.te[0]) == ("event_single_pred", [1], 0, 30)
+    text = {"emb": unit(0, 0, 1)[None], "video_id": np.array(["A"]),
+            "gt_ts": np.array([0], np.float32), "gt_te": np.array([15], np.float32)}
+    row = evaluate_partition(pred, text)
+    assert row["R@1"] == 100 and row["VCMR R@1 (tIoU.5)"] != row["VCMR R@1 (tIoU.5)"]   # NaN: no moment
+
+
 def test_rank_metrics_hand_computed():
     m = rank_metrics(np.array([1, 3, 12]))
     assert m["R@1"] == pytest.approx(100 / 3)

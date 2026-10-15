@@ -4,8 +4,8 @@ Queries: every val caption in ``text.npz``. Positive: the caption's source video
 Per partition: R@1/5/10 (%), MedR, MnR, vectors/video, and a simple moment metric --
 among queries whose top-1 video is right, the share whose argmax segment has
 tIoU >= 0.5 with the caption's GT event (``mom@.5|top1``); ``VCMR R@1`` is the same
-over all queries (right video *and* right moment). ``event_single`` is the mean of the
-``gt`` vectors per video (R1).
+over all queries (right video *and* right moment). ``event_single`` (R1_gt) is the mean of the
+``gt`` vectors per video, ``event_single_pred`` (R1_pred, UEMR_FINAL §5) the mean of the ``uniav_pred`` vectors.
 
 Ranks are strict: ``1 + #(score > positive)``, as ``omniretriever.evaluation.metrics``.
 
@@ -30,7 +30,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .search import SegmentIndex, tiou_vec
+from .search import POOLED, SegmentIndex, tiou_vec
 
 DEFAULT_PARTITIONS = ("global", "event_single", "uni_M_gt", "gt")
 QUERY_BLOCK = 512   # queries per Q x E^T block
@@ -93,7 +93,7 @@ def evaluate_partition(index: SegmentIndex, text: dict, agg: str = "max", videos
            "queries": int(len(r["ranks"])), "coverage": 100 * float(np.mean(r["covered"]))}
     hit = tiou_vec(r["best_ts"], r["best_te"], text["gt_ts"], text["gt_te"]) >= 0.5
     top1 = (r["ranks"] == 1) & r["covered"]
-    pooled = index.name == "event_single"   # one vector per video: no moment
+    pooled = index.name in POOLED   # one vector per video: no moment
     row["mom@.5|top1"] = float("nan") if pooled or not top1.any() else 100 * float(hit[top1].mean())
     row["VCMR R@1 (tIoU.5)"] = float("nan") if pooled else 100 * float((top1 & hit).mean())
     return row
