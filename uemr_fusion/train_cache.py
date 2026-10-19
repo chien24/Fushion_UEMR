@@ -8,6 +8,8 @@ reuses its pieces directly:
       ``write_uniav_source`` records the Athena run that produced ``segments_pred.jsonl`` / ``Z``.
 * B2  ``build_train_partitions``: ``uniav_pred`` (R6), ``uni_M`` (R3), ``gt`` (R7), ``global`` (R0), with the
       functions of ``partitions_uemr`` / ``partitions`` and their checks; ``save_train_partitions``.
+      ``build_train_extra``: the other column (c) rows (R2, R4, R5, ``uni_M_gt``); the Exp 3 noise levels come
+      from ``partitions_uemr.build_noise`` on the train ``gt.json``.
 * B3  ``train_captions`` + ``work_lists`` (``segs_todo`` / ``caps_todo`` for ``omni_retrieval.encode``) and
       ``collect_train`` (``segments.npz``, ``text.npz``, ``meta.json`` in ``omni_cache_train/<tag>/``).
 
@@ -109,6 +111,29 @@ def build_train_partitions(segments_path, durations: dict[str, float], events: l
     k_pred = {v: len(segments[v]) for v in durations}
     rows = [check(name, parts[name], durations, k_pred) for name in TRAIN_PARTITIONS]
     return parts, rows
+
+
+TRAIN_EXTRA = ("uni_chunk", "rand_M", "kmedoids_M", "uni_M_gt")
+
+
+def build_train_extra(segments_path, durations: dict[str, float], events: list[dict], z_dir,
+                      seed: int = 0) -> tuple[dict, list[dict], dict]:
+    """The other column (c) rows for the train videos: R2, R4, R5 with ``partitions_uemr.build`` (the gallery's
+    function, same per-video seeds, K-Medoids on the train Z) and ``uni_M_gt`` as ``partitions.build_base``.
+    Returns ``(parts, check rows, kmedoids stats)``; R1 is pooled from R6 by ``build_cache``."""
+    from omni_retrieval.partitions_uemr import build
+
+    segments = read_segments(segments_path)
+    built, km = build(segments, durations, z_dir, seed)
+    gt = gt_by_video(events)
+    parts = {n: built[n] for n in TRAIN_EXTRA if n in built}
+    parts["uni_M_gt"] = {}
+    for vid in sorted(durations):
+        g = clamp(gt.get(vid, []), durations[vid])
+        parts["uni_M_gt"][vid] = clamp(uniform(durations[vid], len(g)), durations[vid]) if g else []
+    k_pred = {v: len(segments[v]) for v in durations}
+    rows = [check(n, parts[n], durations, k_pred) for n in TRAIN_EXTRA]
+    return parts, rows, km
 
 
 def save_train_partitions(parts: dict, out_dir, segments_path, durations_path, rows: list[dict]) -> None:

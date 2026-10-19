@@ -157,14 +157,14 @@ def main(argv=None) -> int:
         print(f"[train] {out} is finished (val.json), skipped; --force to redo")
         return 0
     out.mkdir(parents=True, exist_ok=True)
-    if a.partition == "global" and a.lam:
-        print("[train] global has one vector per video: L_evt off (lam 0)")
-        a.lam = 0.0
     torch.manual_seed(a.seed)
     rng = np.random.default_rng(a.seed)
     gen = torch.Generator().manual_seed(a.seed)
 
     train = FusionSplit(a.cache, "train", a.partition, a.device)
+    if a.lam and int(train.kmask.sum(1).max()) == 1:          # R0 global, R1 pooled
+        print(f"[train] {a.partition} has one vector per video: L_evt off (lam 0)")
+        a.lam = 0.0
     dev = FusionSplit(a.cache, "dev", a.partition, a.device)
     cfg, model, log_inv_tau = build(a, train.d)
     params = list(model.parameters()) + ([log_inv_tau] if a.learn_tau else [])

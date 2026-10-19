@@ -7,6 +7,9 @@
                                          captions {caption_id, sentence, video_idx [N], q [N, d] fp16, gt_seg [N, 2]}
     fusion_cache/SOURCE.json             sha256 of every input, counts, commit
 
+A ``POOLED`` partition (``event_single_pred`` = R1) has no rows of its own: it is built from its source
+partition (one L2-normalised mean vector per video), so the train cache only needs the source.
+
 Z sits in its own file per split instead of inside every partition file (plan §B4 lists it as a field): the
 four partitions of a split share it, which saves about 1.5 GB of Drive per split. ``d`` is read from the caches.
 
@@ -39,6 +42,7 @@ PARTITIONS = ("uniav_pred", "uni_M", "gt", "global")
 SPLITS = ("train", "dev", "val")
 # Exp 1 column (b), gallery 394 val videos, agg max (NHAN_XET_KET_QUA_P4.md §2.2)
 EXPECTED_VAL_R1 = {"global": 8.32, "uni_M": 18.02, "uniav_pred": 24.88, "gt": 37.52}
+POOLED_TOL = 0.1                      # R@1 points (3 of 3.030 captions) for a POOLED partition in ``parity``
 
 
 def _sha_bytes(path) -> tuple[bytes, str]:
@@ -66,6 +70,19 @@ def segments_by_video(seg: dict, partition: str, videos) -> dict[str, tuple[np.n
         idx = np.array(sorted(idx, key=lambda i: (seg["ts"][i], seg["te"][i])))
         out[v] = (seg["emb"][idx].astype(np.float16),
                   np.stack([seg["ts"][idx], seg["te"][idx]], 1).astype(np.float32))
+    return out
+
+
+def pooled_by_video(seg: dict, partition: str, videos) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    """A ``POOLED`` partition (R1: ``event_single_pred``, ``event_single``): one vector per video, the
+    L2-normalised mean of its source partition, over [first start, last end], as ``SegmentIndex.mean_pooled``."""
+    from omni_retrieval.search import POOLED
+
+    out = {}
+    for v, (e, s) in segments_by_video(seg, POOLED[partition], videos).items():
+        m = e.astype(np.float32).sum(0)
+        out[v] = ((m / max(float(np.linalg.norm(m)), 1e-12))[None].astype(np.float16),
+                  np.array([[s[:, 0].min(), s[:, 1].max()]], np.float32))
     return out
 
 
@@ -120,9 +137,11 @@ def build_split(split: str, a, sources: dict, npz_cache: dict) -> list[dict]:
     z_row = {v: i for i, v in enumerate(videos)}
     glob = segments_by_video(seg, "global", videos)
 
+    from omni_retrieval.search import POOLED
+
     rows = []
     for part in a.partitions:
-        by = segments_by_video(seg, part, videos)
+        by = pooled_by_video(seg, part, videos) if part in POOLED else segments_by_video(seg, part, videos)
         vids = [v for v in videos if v in by]
         if not vids:
             print(f"[{split}] partition {part!r} not in {inp['segments']} -> skipped")
@@ -164,10 +183,12 @@ def parity(cache_dir, expected=EXPECTED_VAL_R1, tol: float = 0.006) -> list[dict
     import torch
 
     from omni_retrieval.evaluate import evaluate_partition
-    from omni_retrieval.search import SegmentIndex
+    from omni_retrieval.search import POOLED, SegmentIndex
 
     rows, bad = [], []
     for part, ref in expected.items():
+        # the pooled vector is stored in fp16 (column b pools in fp32): allow a near tie or two to flip
+        t = POOLED_TOL if part in POOLED else tol
         path = Path(cache_dir) / f"val_{part}.pt"
         if not path.is_file():
             print(f"[parity] no {path.name}, skipped")
@@ -183,7 +204,7 @@ def parity(cache_dir, expected=EXPECTED_VAL_R1, tol: float = 0.006) -> list[dict
             r[name] = evaluate_partition(SegmentIndex(emb, vid, ts, te, part), text)["R@1"]
         rows.append({"partition": part, "expected R@1": ref, "R@1 (E)": round(r["E"], 2),
                      "R@1 (L2norm E)": round(r["L2norm(E) fp32"], 2), "queries": len(text["video_id"])})
-        if abs(r["E"] - ref) > tol:
+        if abs(r["E"] - ref) > t:
             bad.append(part)
     for row in rows:
         print("[parity]", row)

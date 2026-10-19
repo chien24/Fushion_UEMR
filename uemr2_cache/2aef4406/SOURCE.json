@@ -1,0 +1,18 @@
+{
+ "created": "2026-10-19",
+ "doc": "docs/uemr2/KIEM_TRA_ALIGN.md muc 0.3",
+ "athena_checkpoint": {
+  "file": "UniAV-fixed/ckpt/athena.pth (cung file: D:/Hoc/KL/output/athena/athena.pth)",
+  "sha256": "2aef4406818ec0e313fd267cd1485073b582be6c01849449f36f1d33c4e9d122",
+  "bytes": 278180035,
+  "run": "ov_E1",
+  "train_commit": "6552590",
+  "dtype": "float16"
+ },
+ "weights": {
+  "Z_and_proposals": {"key": "state_dict_seg", "epoch_1based": 7, "selected_by": "val R@0.5 (best_seg)"},
+  "q_span_vectors": {"key": "state_dict", "epoch_1based": 10, "selected_by": "val CIDEr (best_cap)"},
+  "h_omni_proj": {"key": null, "note": "athena.pth khong co omni_proj.* (tools/export_api_ckpt.py:67-68); se la omni_proj_ft.pt cua giai doan 1, khi do hash tinh tren cap (athena.pth, omni_proj_ft.pt)"}
+ },
+ "code": {"repo": "UniAV-fixed", "branch": "chien", "head": "48918c5", "model_code_same_as_train_commit": true}
+}

@@ -95,3 +95,51 @@ def test_attention_maps(fusion_cache):
         assert r["attn"].shape == (int(ds.kmask[v].sum()), len(r["t_sec"])) == (len(r["segs"]), 256)
         assert abs(r["attn"].sum(1) - 1).max() < 1e-5
     assert m.training and not m.keep_attn and m.last_attn is None        # state restored
+
+
+def test_pooled_partition_is_mean_of_source(tmp_path):
+    """R1 (event_single_pred) in the cache = L2-normalised mean of the R6 vectors, over [first start, last end],
+    and reproduces column (b) of the gallery cache (SegmentIndex.mean_pooled)."""
+    from conftest import make_world
+    from uemr_fusion.build_cache import main
+
+    args = make_world(tmp_path)
+    out = tmp_path / "fc"
+    main(["--out", str(out), *args, "--partitions", "uniav_pred", "event_single_pred", "global", "--no-parity"])
+    src = torch.load(out / "train_uniav_pred.pt", weights_only=False)
+    pooled = torch.load(out / "train_event_single_pred.pt", weights_only=False)
+    assert pooled["video_ids"] == src["video_ids"] and all(len(e) == 1 for e in pooled["E"])
+    for e, s, pe, ps in zip(src["E"], src["segs"], pooled["E"], pooled["segs"]):
+        m = e.float().sum(0)
+        assert torch.allclose(pe[0].float(), m / m.norm(), atol=2e-3)
+        assert ps.tolist() == [[float(s[0, 0]), float(s[-1, 1])]]
+    assert pooled["eg_ok"].all()
+    subset = json.loads((tmp_path / "subset_videos.json").read_text())["videos"]
+    val = {r["video_id"] for r in subset if r["split"] == "val"}
+    rows = evaluate(tmp_path / "omni_cache" / "ft", ["event_single_pred"], "max", val)
+    assert len(parity(out, {"event_single_pred": round(rows[0]["R@1"], 2)})) == 1
+    ds = FusionSplit(out, "dev", "event_single_pred")
+    assert ds.E.shape[1] == 1
+
+
+def test_build_train_extra(tmp_path):
+    """R2 / R4 / R5 / uni_M_gt of the train videos: the gallery rules (K_pred for R4, R5; K_GT for uni_M_gt)."""
+    from conftest import _z_dir
+    from uemr_fusion.train_cache import TRAIN_EXTRA, build_train_extra
+
+    dur = {"tr0": 60.0, "tr1": 95.0}
+    pred = {"tr0": [[0, 20], [20, 41], [41, 60]], "tr1": [[5, 30], [30, 70]]}
+    seg = tmp_path / "segments_pred.jsonl"
+    seg.write_text("".join(json.dumps({"video_id": v, "ts": a, "te": b, "conf": 0.5}) + "\n"
+                           for v, s in pred.items() for a, b in s))
+    _z_dir(tmp_path / "Z", list(dur), dur, np.random.default_rng(0))
+    events = [{"video": "tr0.mp4", "timestamps": [3, 9]}, {"video": "tr0.mp4", "timestamps": [30, 50]},
+              {"video": "tr1.mp4", "timestamps": [10, 40]}]
+    parts, rows, km = build_train_extra(seg, dur, events, tmp_path / "Z")
+    assert set(parts) == set(TRAIN_EXTRA) and [r["partition"] for r in rows] == list(TRAIN_EXTRA)
+    for v in dur:
+        assert len(parts["rand_M"][v]) == len(parts["kmedoids_M"][v]) == len(pred[v])
+    assert [len(parts["uni_M_gt"][v]) for v in ("tr0", "tr1")] == [2, 1]
+    assert parts["uni_chunk"]["tr0"][0] == [0.0, 14.0] and km["videos"] == 2
+    again, _, _ = build_train_extra(seg, dur, events, tmp_path / "Z")
+    assert again == parts                                                  # per-video seeds: reproducible
