@@ -488,7 +488,7 @@
   "tie": "W lớn hơn (multi xếp cuối) rồi γ nhỏ hơn",
   "video_score": "max(max đoạn R6 theo Omni z, max cửa sổ theo nguồn rẻ z + γ); bằng nhau thì lấy đoạn R6",
   "dense_W": "uemr2.windows.dense: dài W, bước W/2, bắt đầu 0, giữ khi start + W/2 < duration, kẹp vào [0, duration]",
-  "gap_W": "uemr2.windows.gap_mask: cửa sổ của dense_W có tIoU = 0 với mọi đoạn R6 và >= 50% thời lượng ngoài hợp các đoạn R6 (điều kiện thứ hai thừa khi tIoU = 0)",
+  "gap_W": "Sửa đổi 1 (xem amendments[0]): cửa sổ của dense_W có >= 50% thời lượng nằm NGOÀI hợp mọi đoạn R6 của video; không có điều kiện tIoU (uemr2.windows.gap_mask, mặc định).",
   "families": [
    "R6 ∪ gap_W (dùng cho cổng)",
    "R6 ∪ dense_W (tham khảo)"
@@ -535,5 +535,19 @@
   "pt": "Chỉ encode pt khi B-e (R6) - (b) >= +1.0 R@1 hoặc (B-E3 gap đã chọn) - R6 >= +2.0 R@1; không thì ghi 'biến thể pt không chạy vì ft không có tín hiệu'",
   "on": "kết quả out-of-fold val394; kho 498 báo cáo thêm"
  },
- "caveat": "Athena vẫn được chọn checkpoint trên val, nên kết quả out-of-fold vẫn có thể hơi lạc quan; kết quả âm đáng tin hơn kết quả dương."
+ "caveat": "Athena vẫn được chọn checkpoint trên val, nên kết quả out-of-fold vẫn có thể hơi lạc quan; kết quả âm đáng tin hơn kết quả dương.",
+ "amendments": [
+  {
+   "id": 1,
+   "date": "2026-10-19",
+   "previous_sha256": "f591ace2c06ec46bd4330c22a425001312fc164939ab0bfc07f0ba4e019e347e",
+   "timing": "SAU khi đã chấm val một lần (ô 5 uemr2_hai_khong_gian.ipynb, RUN_VAL = True, log notebooks/log/uemr_2/uemr2_hai_khong_gian_run_val_true.ipynb). Kết quả lần đó, với định nghĩa gap_W cũ, vẫn là kết quả đăng ký trước; kết quả với định nghĩa mới ghi là 'sửa sau khi thấy val'.",
+   "change": "gap_W: bỏ điều kiện tIoU = 0 với mọi đoạn R6; chỉ giữ >= 50% thời lượng ngoài hợp R6.",
+   "first_definition": "tIoU = 0 với mọi đoạn R6 VÀ >= 50% thời lượng ngoài hợp R6 (uemr2.windows.gap_mask(..., tiou_max=0.0))",
+   "reason": "tIoU = 0 làm điều kiện 50% thừa; còn tIoU nhỏ không có nghĩa là 'ngoài R6' khi đoạn R6 dài (cửa sổ 4 s nằm gọn trong đoạn 60 s có tIoU ≈ 0.07).",
+   "unchanged": "E3 giữ cả R6 ∪ gap_W và R6 ∪ dense_W, cùng lưới W, γ, cùng F1/F2 và quy tắc hoà. Cổng E3 vẫn theo R6 ∪ gap_W.",
+   "added_descriptive": "Thống kê mô tả (không chấm điểm) trên dev và val: số gap_W mỗi video (TB, trung vị, số video có 0) cho từng W; tỉ lệ hợp R6 phủ thời lượng video; trong các bước bị bỏ sót (best tIoU GT với R6 < 0.3, cùng định nghĩa r7_r6_by_miss.csv), % có >= 1 cửa sổ gap_W (chạm bước, và tIoU >= 0.3) và % có >= 1 cửa sổ dense_W tIoU >= 0.3 (uemr2.experiments.gap_stats).",
+   "also_fixed": "Cột 'vector rẻ/video' của bảng E3 lần chạy đầu chia số cửa sổ của cả 498 video cho số video của kho (val394: dense_8 98.3 thay vì 77.8). Chỉ là cột mô tả, không ảnh hưởng điểm."
+  }
+ ]
 }

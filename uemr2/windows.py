@@ -4,9 +4,9 @@
 every second is covered and the last window, clipped to the video, is longer than W/2); a video shorter than W/2 has
 one window [0, duration].
 
-``gap_mask(windows, r6)``: windows with tIoU = 0 with every R6 segment of the video **and** at least ``min_out`` of
-their length outside the union of the R6 segments. (tIoU = 0 already means no overlap, so the second condition
-only matters if ``tiou_max`` is raised above 0.)
+``gap_mask(windows, r6)``: windows with at least ``min_out`` (50 %) of their length outside the union of the R6
+segments of the video (prereg amendment 1, 2026-10-19: no tIoU condition). The first registered definition also asked
+tIoU = 0 with every R6 segment, which made the 50 % condition redundant; ``tiou_max=0.0`` reproduces it.
 """
 
 from __future__ import annotations
@@ -45,10 +45,13 @@ def outside_fraction(windows: np.ndarray, segs: np.ndarray) -> np.ndarray:
     return 1 - inter / length
 
 
-def gap_mask(windows: np.ndarray, r6: np.ndarray, tiou_max: float = 0.0, min_out: float = 0.5) -> np.ndarray:
+def gap_mask(windows: np.ndarray, r6: np.ndarray, min_out: float = 0.5, tiou_max: float | None = None) -> np.ndarray:
     windows = np.asarray(windows, np.float64).reshape(-1, 2)
     r6 = np.asarray(r6, np.float64).reshape(-1, 2)
     if not len(r6):
         return np.ones(len(windows), bool)
-    t = tiou_vec(windows[:, None, 0], windows[:, None, 1], r6[None, :, 0], r6[None, :, 1]).max(1)
-    return (t <= tiou_max) & (outside_fraction(windows, r6) >= min_out)
+    keep = outside_fraction(windows, r6) >= min_out
+    if tiou_max is not None:                       # first registered definition (amendment 1 dropped it)
+        t = tiou_vec(windows[:, None, 0], windows[:, None, 1], r6[None, :, 0], r6[None, :, 1]).max(1)
+        keep &= t <= tiou_max
+    return keep

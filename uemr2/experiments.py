@@ -18,7 +18,7 @@ import numpy as np
 from omni_retrieval.search import tiou_vec
 
 from .score import cos_stats, cv_pick, e3, layout, metrics, moment_hit, oof, ranks, video_max
-from .windows import DENSE_W, gap_mask
+from .windows import DENSE_W, gap_mask, outside_fraction
 
 SRC = {"omni": ("e", "omni"), "A": ("q", "iv2"), "B": ("h", "omni")}
 BETAS = (0.0, 0.25, 0.5, 1.0, 2.0)
@@ -172,7 +172,7 @@ def cv_e3(world, z, gallery, fq, src, kind="gap", ws=E3_W, gammas=GAMMAS):
     cands, res, nwin = [], [], {}
     for w in ws:
         pre = e3_scores(world, z, "val", gallery, src, w, kind)
-        nwin[w] = len(pre[2]["video_id"]) / len(world["videos"][gallery])
+        nwin[w] = float(np.isin(pre[2]["video_id"], world["videos"][gallery]).sum()) / len(world["videos"][gallery])
         for g in gammas:
             cands.append((w, g))
             res.append(e3_ranks(world, "val", gallery, pre, g))
@@ -208,3 +208,48 @@ def miss_labels(world) -> np.ndarray:
         m = r6["video_id"] == v
         out.append(float(tiou_vec(r6["ts"][m], r6["te"][m], a, b).max()) < MISS_TIOU if m.any() else True)
     return np.array(out)
+
+
+def _r6_union_by_video(world):
+    r6 = world["parts"]["uniav_pred"]
+    out = {}
+    for v, a, b in zip(r6["video_id"], r6["ts"], r6["te"]):
+        out.setdefault(str(v), []).append((a, b))
+    return {v: np.asarray(x, np.float64) for v, x in out.items()}
+
+
+def gap_stats(world, split) -> tuple[list[dict], dict]:
+    """Descriptive only (no scoring), amendment 1: gap_W windows per video for each W, share of the video covered by
+    the union of R6, and for the captions whose step UniAV missed (best tIoU with R6 < 0.3) the share with at least
+    one gap_W window touching the step (tIoU > 0), at tIoU >= 0.3, and with a dense_W window at tIoU >= 0.3.
+    The video duration is the end of its last dense window (windows are clipped to the mp4)."""
+    vids = world["videos"][split]
+    r6 = _r6_union_by_video(world)
+    d4 = window_rows(world, 4)
+    dur = {v: float(d4["te"][d4["video_id"] == v].max()) for v in vids}
+    cover = np.array([1 - outside_fraction([[0.0, dur[v]]], r6.get(v, np.zeros((0, 2))))[0] for v in vids])
+    T = world["text"][split]
+    best = np.array([float(tiou_vec(r6[str(v)][:, 0], r6[str(v)][:, 1], a, b).max()) if str(v) in r6 else 0.0
+                     for v, a, b in zip(T["video_id"], T["gt_ts"], T["gt_te"])])
+    miss = best < MISS_TIOU
+    rows = []
+    for w in (*DENSE_W, "multi"):
+        win, gap = window_rows(world, w), gap_rows(world, w)
+        n = np.array([(gap["video_id"] == v).sum() for v in vids])
+        def any_hit(rows_, thr):
+            out = []
+            for v, a, b in zip(T["video_id"][miss], T["gt_ts"][miss], T["gt_te"][miss]):
+                m = rows_["video_id"] == v
+                t = tiou_vec(rows_["ts"][m], rows_["te"][m], a, b)
+                out.append(bool(m.any()) and (t.max() > thr if thr == 0 else t.max() >= thr))
+            return 100 * float(np.mean(out)) if out else float("nan")
+        rows.append({"tập": split, "W": w, "gap_W/video TB": float(n.mean()), "gap_W/video trung vị": float(np.median(n)),
+                     "video có 0 gap_W": int((n == 0).sum()),
+                     "dense_W/video TB": float(np.isin(win["video_id"], vids).sum()) / len(vids),
+                     "% bước bỏ sót có gap_W chạm (tIoU>0)": any_hit(gap, 0),
+                     "% bước bỏ sót có gap_W tIoU>=0.3": any_hit(gap, 0.3),
+                     "% bước bỏ sót có dense_W tIoU>=0.3": any_hit(win, 0.3)})
+    summary = {"tập": split, "video": len(vids), "câu": int(len(miss)), "câu bỏ sót": int(miss.sum()),
+               "hợp R6 phủ video: TB %": 100 * float(cover.mean()), "trung vị %": 100 * float(np.median(cover)),
+               "min %": 100 * float(cover.min()), "max %": 100 * float(cover.max())}
+    return rows, summary

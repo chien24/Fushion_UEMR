@@ -23,15 +23,21 @@ def test_dense_covers_the_video_with_step_w_half():
             assert (win[1:, 0] <= win[:-1, 1]).all()                  # no hole
 
 
-def test_gap_windows_do_not_touch_r6():
+def test_gap_windows_are_mostly_outside_r6():
     win = dense(60.0, 8)
     r6 = np.array([[5.0, 20.0], [30.0, 33.0]])
     m = gap_mask(win, r6)
     assert m.any() and not m.all()
-    t = tiou_vec(win[m, None, 0], win[m, None, 1], r6[None, :, 0], r6[None, :, 1])
-    assert (t == 0).all() and (outside_fraction(win[m], r6) == 1).all()
+    assert (outside_fraction(win[m], r6) >= 0.5).all() and (outside_fraction(win[~m], r6) < 0.5).all()
     assert np.allclose(outside_fraction([[0, 10]], [[2, 4], [3, 6]]), 0.6)
     assert gap_mask(win, np.zeros((0, 2))).all()
+    # a 4 s window inside a 60 s R6 step: tIoU 0.07 but nothing outside -> not a gap window
+    assert not gap_mask([[10.0, 14.0]], [[0.0, 60.0]]).any()
+    # first registered definition (tIoU = 0) is the stricter subset
+    v1 = gap_mask(win, r6, tiou_max=0.0)
+    assert not (v1 & ~m).any()
+    t = tiou_vec(win[v1, None, 0], win[v1, None, 1], r6[None, :, 0], r6[None, :, 1])
+    assert (t == 0).all()
 
 
 def test_seconds_grid_roundtrip_under_one_step():

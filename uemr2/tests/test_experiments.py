@@ -67,6 +67,11 @@ def test_pipeline_runs_and_beta_zero_is_column_b():
     assert 0 <= r["R@1"] <= 100
     miss = X.miss_labels(w)
     assert miss.dtype == bool and len(miss) == len(fq)
+    for sp in ("dev", "val"):
+        rows, summ = X.gap_stats(w, sp)
+        assert len(rows) == 4 and 0 <= summ["hợp R6 phủ video: TB %"] <= 100
+        assert all(r["gap_W/video TB"] <= r["dense_W/video TB"] for r in rows)
+    assert X.gap_stats(w, "val")[1]["câu bỏ sót"] == int(miss.sum())
 
 
 def test_tables_and_gates():
