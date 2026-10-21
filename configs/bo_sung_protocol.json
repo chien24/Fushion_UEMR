@@ -14,6 +14,12 @@
     "results_new": "uemr/results/961f1a89/bo_sung/"
   },
 
+  "phases": {
+    "dev": "lượt 1: thiết lập, kiểm tái lập, việc 2, việc 3, chọn θ từng mức K (việc 4, chỉ đếm đoạn), lưới R8 trên dev (việc 5, chỉ encode clip dev cần); không chấm val cho việc 4-10",
+    "val": "lượt 2: đọc viec4_budget.locked và viec5_R8.locked, thiếu thì dừng (không chọn lại); chấm val việc 4-10 đúng một lần",
+    "pin": "notebook checkout FUSHION_REF và assert sha256[:16] của file này bằng PB_SHA16 ghi trong notebook"
+  },
+
   "rules": {
     "selection": "mọi lựa chọn tham số trên dev (104 video, 773 caption, gallery dev); val (394 video, 3.030 caption) chấm một lần cho mỗi cấu hình đã khoá ở đây; không chỉnh gì sau khi nhìn val",
     "bootstrap": {"unit": "video", "n_boot": 1000, "seed": 0, "ci": 95, "code": "omni_retrieval.evaluate.paired_bootstrap"},
@@ -42,7 +48,10 @@
     "R3_K": "cắt đều với đúng số đoạn R6_K của từng video (partitions.uniform)",
     "overlap": "mỗi video (tổng độ dài đoạn - độ dài hợp) / tổng độ dài, trung bình trên val",
     "encode": "Omni ft, gallery 498 video, chỉ đoạn chưa có trong store",
-    "claim": "'R6 hơn cắt đều ở ngân sách K' chỉ khi cận dưới CI của R6_K - R3_K > 0 ở K đó"
+    "claim": "'R6 hơn cắt đều ở ngân sách K' chỉ khi cận dưới CI của R6_K - R3_K > 0 ở K đó",
+    "report_shape": "mỗi mức: độ phủ video và tỉ lệ chồng lấn giữa các đoạn R6_K (dev ở lượt 1, val ở lượt 2); chồng lấn nhiều ở θ thấp thì ghi cạnh bảng",
+    "locked": null,
+    "locked_note": "null: lượt 1 (PHASE dev) chọn θ từng mức trên dev, chỉ đếm đoạn, không encode; khối in cuối lượt 1 được chép vào đây và commit trước lượt 2"
   },
 
   "viec5_R8": {
@@ -50,7 +59,7 @@
     "grid": {"L_min": [3, 5, 10], "L_fill": [7, 10, 14]},
     "rule": "R@1 dev (gallery dev 104, caption dev) cao nhất; các cấu hình kém nó < 0.3 điểm -> ít vector/video hơn, rồi R@1 cao hơn (omni_retrieval.bo_sung.pick_fill)",
     "locked": null,
-    "locked_note": "null: lượt 1 chỉ chấm dev rồi dừng phần val của R8; người viết ghi {L_min, L_fill} vào đây, commit, rồi mới chạy lượt 2 (chấm val)",
+    "locked_note": "null: lượt 1 (PHASE dev) chỉ encode và chấm lưới trên dev; {L_min, L_fill} chọn được (kèm R@1 dev, vector/video cả lưới) chép vào đây và commit trước lượt 2",
     "report_val": ["R@1/5/10", "VCMR R@1", "vector/video", "độ phủ video", "tỉ lệ bỏ sót (định nghĩa việc 2)",
                    "R8 - R6, R8 - R2, R8 - R6∪R2 (CI)", "kho 498", "nhóm bỏ sót / không bỏ sót: R6, R8, R7 và R8 - R6 (CI)"],
     "miss_group": "câu có event GT với max tIoU < 0.3 so với các đoạn R6 cùng video = 'bước bị R6 bỏ sót'",
@@ -76,12 +85,14 @@
     "method": "chỉ hình đúng nhánh của mô hình: prompt video-only của Omni-fix (_prepare_submodal_input({'video'})), không token <|AUDIO|>, không tensor âm thanh (encode.py --no-audio); assert prompt = prompt AV bỏ token âm thanh",
     "probe": "5 clip trước: vector hữu hạn và khác bản có âm thanh",
     "rows": ["global", "uni_M", "uniav_pred", "gt", "R8 nếu qua tiêu chí đổi phương pháp chính"], "gallery": "val 394", "omni": "ft",
-    "report": ["R@1 có / không âm thanh, Δ (CI) từng dòng", "R6 - R3 có âm thanh và không âm thanh (CI)"],
+    "report": ["R@1 có âm thanh / bỏ âm thanh lúc suy luận, Δ (CI) từng dòng", "R6 - R3 có âm thanh và bỏ âm thanh lúc suy luận (CI)"],
+    "wording": "gọi Δ là 'bỏ âm thanh lúc suy luận', không phải 'mô hình không dùng âm thanh': cả ft và pt đều chưa từng thấy đầu vào chỉ hình",
     "limit": "UniAV giữ nguyên (Athena dùng âm thanh, không train lại): chỉ đo vai trò âm thanh phía Omni; checkpoint-1948 train cặp video + âm thanh nên đầu vào chỉ hình cũng là đầu vào nó chưa thấy lúc fine-tune"
   },
 
   "viec9_clip": {
-    "model": "ViT-L-14", "pretrained": "openai", "package": "open_clip_torch==2.24.0",
+    "model": "ViT-L-14", "pretrained": "openai", "package": "open_clip_torch==2.24.0 + ftfy==6.2.0, pip --no-deps",
+    "env_guard": "in phiên bản torch, torchvision, transformers và thư viện Omni trước / sau khi cài; đổi bất kỳ bản nào hoặc import lỗi -> bỏ qua việc 9, ghi trong log",
     "segment_vector": "trung bình 8 khung lấy như Omni (omni_retrieval.bo_sung.frame_index), mỗi khung L2-normalise, rồi L2-normalise",
     "query": "text encoder của CLIP, cosine, MaxSim như Omni", "rows": ["global", "uni_chunk", "uni_M", "uniav_pred", "gt", "R8 (nếu đã khoá)"],
     "gallery": "val 394", "pairs": ["R6 - R3", "R6 - R0", "R7 - R6"], "tuning": "không"
