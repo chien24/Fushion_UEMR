@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "date": "2026-10-21",
+  "doc": "notebooks/uemr/UEMR_YC2_BO_SUNG.md (yêu cầu); notebook notebooks/uemr/uemr_yc2_bo_sung.ipynb; ghi TRƯỚC khi chạy Colab",
+  "scope": "chỉ YC2, chỉ UEMR; không UEMR 2, không HT-Step, không train lại Athena hay Omni",
+
+  "inputs": {
+    "final_protocol_sha256_16": "133125b9549bc74a",
+    "athena_sha256": "961f1a895f4b43c811d3e0cfa31448641989a0a0e39e421ed397682407643d58",
+    "uniav_output": "uniav_cache/athena_961f1a89 (gallery 498) + athena_961f1a89_train; raw_proposals.jsonl = soft-NMS, trước θ",
+    "omni_ft": "checkpoint-1948",
+    "omni_pt": "OmniRetriever-7B",
+    "results_read_only": ["uemr/results/961f1a89/", "uemr/results/056d388e/"],
+    "results_new": "uemr/results/961f1a89/bo_sung/"
+  },
+
+  "rules": {
+    "selection": "mọi lựa chọn tham số trên dev (104 video, 773 caption, gallery dev); val (394 video, 3.030 caption) chấm một lần cho mỗi cấu hình đã khoá ở đây; không chỉnh gì sau khi nhìn val",
+    "bootstrap": {"unit": "video", "n_boot": 1000, "seed": 0, "ci": 95, "code": "omni_retrieval.evaluate.paired_bootstrap"},
+    "every_delta_with_ci": true,
+    "unexpected_results": "ghi đủ, không bỏ dòng, không đổi tiêu chí"
+  },
+
+  "reproduce_val394_R@1_ft": {"global": 8.32, "uni_M": 18.02, "uni_chunk": 27.16, "uniav_pred": 24.52, "gt": 37.52, "tol": 0.005},
+
+  "viec2_miss": {
+    "event": "% event GT của val có max tIoU với mọi đoạn R6 của video < 0.3 (partitions_uemr.miss_rate trên uniav_pred.json, gt.json)",
+    "query": "% caption val mà event GT của nó (gt_ts, gt_te trong text.npz) có max tIoU với các đoạn R6 cùng video < 0.3",
+    "also": "cùng số trên segments_pred.jsonl thô (chưa làm tròn 2 chữ số theo mp4), số đoạn R6 trung bình và tIoU trung bình của R6 trên val"
+  },
+
+  "viec3_ci": ["R6 mới - cũ: R@5, R@10, VCMR R@1 (tIoU 0.5) trên val 394; R@1 trên kho 498",
+               "Athena sạch: R6 - R2 kho 498; R6 ∪ R2 - R2 kho 394 và 498"],
+
+  "viec4_budget": {
+    "targets_K": [7.5, 10, 14, 18, 22],
+    "level_7_5": "θ của R6 hiện tại (theta.json của athena_961f1a89 = 0.40, chọn trên dev theo final_protocol), không chỉnh lại; phải tái lập 24.52 (R6_K) và 18.02 (R3_K)",
+    "method": "quét θ trên raw_proposals.jsonl với đúng hậu xử lý uemr (k_max 30, d_min 2, merge_tiou 0.7, giữ ít nhất 1)",
+    "theta_grid": {"start": 0.15, "stop": 0.40, "step": 0.005},
+    "fallback": "chỉ khi θ gần nhất lệch mục tiêu > 0.5 trên dev: top-k proposal theo conf (θ = 0, k_max = k, k = 1..30), cùng hậu xử lý",
+    "rule": "mỗi K mục tiêu: tham số có K_pred trung bình dev gần K nhất; hoà -> θ lớn hơn / k nhỏ hơn (ít vector hơn) (omni_retrieval.bo_sung.pick_level)",
+    "R3_K": "cắt đều với đúng số đoạn R6_K của từng video (partitions.uniform)",
+    "overlap": "mỗi video (tổng độ dài đoạn - độ dài hợp) / tổng độ dài, trung bình trên val",
+    "encode": "Omni ft, gallery 498 video, chỉ đoạn chưa có trong store",
+    "claim": "'R6 hơn cắt đều ở ngân sách K' chỉ khi cận dưới CI của R6_K - R3_K > 0 ở K đó"
+  },
+
+  "viec5_R8": {
+    "definition": "đoạn R8 = mọi đoạn R6 + với mỗi khoảng thời gian không đoạn R6 nào phủ dài >= L_min (đầu và cuối video cũng tính), cắt khoảng đó thành max(1, round(độ dài / L_fill)) cửa sổ đều (round lên ở .5) (omni_retrieval.bo_sung.fill_gaps)",
+    "grid": {"L_min": [3, 5, 10], "L_fill": [7, 10, 14]},
+    "rule": "R@1 dev (gallery dev 104, caption dev) cao nhất; các cấu hình kém nó < 0.3 điểm -> ít vector/video hơn, rồi R@1 cao hơn (omni_retrieval.bo_sung.pick_fill)",
+    "locked": null,
+    "locked_note": "null: lượt 1 chỉ chấm dev rồi dừng phần val của R8; người viết ghi {L_min, L_fill} vào đây, commit, rồi mới chạy lượt 2 (chấm val)",
+    "report_val": ["R@1/5/10", "VCMR R@1", "vector/video", "độ phủ video", "tỉ lệ bỏ sót (định nghĩa việc 2)",
+                   "R8 - R6, R8 - R2, R8 - R6∪R2 (CI)", "kho 498", "nhóm bỏ sót / không bỏ sót: R6, R8, R7 và R8 - R6 (CI)"],
+    "miss_group": "câu có event GT với max tIoU < 0.3 so với các đoạn R6 cùng video = 'bước bị R6 bỏ sót'",
+    "switch_main_method": "phương pháp chính chuyển từ R6 MaxSim sang R8 chỉ khi trên val cận dưới CI 95% của R8 - R6 > 0; không đạt -> giữ R6 MaxSim",
+    "sentences_R8_vs_R2": {
+      "ci_low > 0": "R8 vượt R2, với X vector/video so với 22.66",
+      "ci contains 0": "không phân biệt được R8 và R2 về R@1 (không viết 'tương đương' hay 'bằng')",
+      "ci_high < 0": "R2 vẫn cao hơn"
+    }
+  },
+
+  "viec6_R5b": {
+    "definition": "medoid như R5 (kmedoids trên Z level 0, K = số đoạn R6 của video, cùng seed theo video); mỗi medoid -> cửa sổ dài thời lượng / K đặt giữa medoid, cắt gọn trong [0, thời lượng] (omni_retrieval.bo_sung.centred_windows)",
+    "check": "cửa sổ [t - 1, t + 1] từ cùng medoid phải trùng kmedoids_M.json",
+    "report": ["R@1", "độ phủ", "R6 - R5b (CI)"],
+    "name_in_text": "biến thể kiểu đa dạng nội dung (không gọi là tái hiện MeVTR)"
+  },
+
+  "viec7_pt": {"rows": ["global", "uni_M", "uniav_pred", "gt", "uni_chunk", "R8 (nếu đã khoá)"], "gallery": "val 394",
+               "pairs": ["R6 - R0", "R6 - R3", "R7 - R6"]},
+
+  "viec8_audio": {
+    "method": "chỉ hình đúng nhánh của mô hình: prompt video-only của Omni-fix (_prepare_submodal_input({'video'})), không token <|AUDIO|>, không tensor âm thanh (encode.py --no-audio); assert prompt = prompt AV bỏ token âm thanh",
+    "probe": "5 clip trước: vector hữu hạn và khác bản có âm thanh",
+    "rows": ["global", "uni_M", "uniav_pred", "gt", "R8 nếu qua tiêu chí đổi phương pháp chính"], "gallery": "val 394", "omni": "ft",
+    "report": ["R@1 có / không âm thanh, Δ (CI) từng dòng", "R6 - R3 có âm thanh và không âm thanh (CI)"],
+    "limit": "UniAV giữ nguyên (Athena dùng âm thanh, không train lại): chỉ đo vai trò âm thanh phía Omni; checkpoint-1948 train cặp video + âm thanh nên đầu vào chỉ hình cũng là đầu vào nó chưa thấy lúc fine-tune"
+  },
+
+  "viec9_clip": {
+    "model": "ViT-L-14", "pretrained": "openai", "package": "open_clip_torch==2.24.0",
+    "segment_vector": "trung bình 8 khung lấy như Omni (omni_retrieval.bo_sung.frame_index), mỗi khung L2-normalise, rồi L2-normalise",
+    "query": "text encoder của CLIP, cosine, MaxSim như Omni", "rows": ["global", "uni_chunk", "uni_M", "uniav_pred", "gt", "R8 (nếu đã khoá)"],
+    "gallery": "val 394", "pairs": ["R6 - R3", "R6 - R0", "R7 - R6"], "tuning": "không"
+  },
+
+  "viec10_text_to_clip": {
+    "task": "mỗi caption val tìm đúng clip GT của nó trong 3.030 clip GT của val (omni_retrieval.evaluate.text_to_clip, gallery 'eval')",
+    "models": ["Omni ft", "Omni pt", "CLIP ViT-L/14"], "report": ["R@1", "R@5", "R@10", "MdR"],
+    "published": "không điền số bài báo từ trí nhớ; bảng để trống, cột nguồn, 'người dùng bổ sung'"
+  },
+
+  "descriptive_only": ["viec6_R5b", "viec7_pt", "viec8_audio", "viec9_clip", "viec10_text_to_clip"],
+  "stop_and_report": ["kiểm tái lập đầu notebook lệch", "việc 4 không đạt K >= 14 bằng cả θ và top-k",
+                      "ước lượng chi phí > 10 giờ A100", "việc 8 không có cách bỏ âm thanh hợp lệ",
+                      "thứ tự R6 > R3 hoặc R6 > R0 (Omni ft, kho 394) đổi"]
+}

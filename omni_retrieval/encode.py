@@ -230,6 +230,23 @@ class _Records:
             return i, None, repr(e)
 
 
+def video_only(ds, item: dict, audio_ids) -> dict:
+    """Exp 4 (``--no-audio``): the clip without its audio, as Omni-fix builds its own video-only input
+    (``_prepare_submodal_input({'video'})``, the Tuple-InfoNCE branch): no audio token, no audio tensor.
+
+    The prompt must equal the AV prompt with its audio tokens (``<|AUDIO|>``, audio bos / eos) removed, else the
+    template differs from the one the AV vectors were encoded with and the record fails.
+    """
+    import torch
+
+    ids = ds._prepare_submodal_input({"video"}, None, None, item["video_grid_thw"], [item["video_second_per_grid"]])
+    av = item["input_ids"][0]
+    if not torch.equal(ids[0], av[~torch.isin(av, audio_ids)]):
+        raise ValueError("video-only prompt != AV prompt without its audio tokens")
+    return {**item, "input_ids": ids, "attention_mask": ids.ne(PAD_TOKEN_ID).to(torch.int64),
+            "input_features": None, "feature_attention_mask": None, "input_raw_wav": None}
+
+
 class ChunkWriter:
     def __init__(self, store: Path, modality: str, chunk_size: int):
         self.store, self.modality, self.chunk_size = store, modality, chunk_size
@@ -257,7 +274,7 @@ class ChunkWriter:
 
 
 def encode_av(model, processor, records_path: Path, writer: ChunkWriter, device: str,
-              dtype: str, num_workers: int, silence: bool = False) -> dict:
+              dtype: str, num_workers: int, silence: bool = False, no_audio: bool = False) -> dict:
     import torch
     from torch.utils.data import DataLoader
     from tqdm.auto import tqdm
@@ -276,6 +293,8 @@ def encode_av(model, processor, records_path: Path, writer: ChunkWriter, device:
     data_args.run_test = True
     ds = om.LazySupervisedDataset(tokenizer=processor.tokenizer, data_args=data_args)
     ids = [r["id"] for r in ds.list_data_dict]
+    audio_ids = torch.tensor(processor.tokenizer.convert_tokens_to_ids(
+        [processor.audio_token, processor.audio_bos_token, processor.audio_eos_token]))
     collator = om.DataCollatorForOmniDataset()
     # Batch 1 like the eval: the fusion head pools a fixed last position, so padding
     # would change the embeddings. Workers only overlap the CPU decode with the GPU.
@@ -288,6 +307,12 @@ def encode_av(model, processor, records_path: Path, writer: ChunkWriter, device:
             if item is None:
                 writer.fail(ids[i], err or "dataset returned None")
                 continue
+            if no_audio:
+                try:
+                    item = video_only(ds, item, audio_ids)
+                except Exception as e:  # noqa: BLE001
+                    writer.fail(ids[i], repr(e))
+                    continue
             batch = _to_device(collator([item]), device, torch_dtype, torch)
             out = model(**batch, output_hidden_states=True, pred_embeds=True, return_dict=True)
             emb = out.mllm_embeds.float()
@@ -322,7 +347,11 @@ def main(argv=None) -> int:
     p.add_argument("--timing-out", default=None, help="write timing JSON here")
     p.add_argument("--silence", action="store_true",
                    help="Exp 4: replace every clip's audio by silence (out of distribution); use a separate --store")
+    p.add_argument("--no-audio", action="store_true",
+                   help="Exp 4: video-only input (no audio token, no audio tensor); use a separate --store")
     a = p.parse_args(argv)
+    if a.silence and a.no_audio:
+        p.error("--silence and --no-audio exclude each other")
 
     if a.video_root:
         os.environ["VIDEO_ROOT"] = a.video_root
@@ -347,7 +376,8 @@ def main(argv=None) -> int:
     load_sec = time.time() - t0
     writer = ChunkWriter(store, a.modality, a.chunk_size)
     meta = {"adapter": a.adapter, "base_model": a.base_model, "beats_path": a.beats_path,
-            "dtype": a.dtype, "preprocessing": preprocessing_params(processor), "audio": "silence" if a.silence else "mp4"}
+            "dtype": a.dtype, "preprocessing": preprocessing_params(processor),
+            "audio": "silence" if a.silence else "none (video-only prompt)" if a.no_audio else "mp4"}
     (store / "encoder_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
     t1 = time.time()
@@ -356,7 +386,8 @@ def main(argv=None) -> int:
         with open(pending_path, "w", encoding="utf-8") as f:
             for r in pending:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
-        stats = encode_av(model, processor, pending_path, writer, a.device, a.dtype, a.num_workers, a.silence)
+        stats = encode_av(model, processor, pending_path, writer, a.device, a.dtype, a.num_workers, a.silence,
+                          a.no_audio)
     else:
         vecs = encode_texts(model, processor.tokenizer, [r["text"] for r in pending], a.batch_size)
         for r, v in zip(pending, vecs):
