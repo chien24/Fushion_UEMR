@@ -50,16 +50,34 @@
     "encode": "Omni ft, gallery 498 video, chỉ đoạn chưa có trong store",
     "claim": "'R6 hơn cắt đều ở ngân sách K' chỉ khi cận dưới CI của R6_K - R3_K > 0 ở K đó",
     "report_shape": "mỗi mức: độ phủ video và tỉ lệ chồng lấn giữa các đoạn R6_K (dev ở lượt 1, val ở lượt 2); chồng lấn nhiều ở θ thấp thì ghi cạnh bảng",
-    "locked": null,
-    "locked_note": "null: lượt 1 (PHASE dev) chọn θ từng mức trên dev, chỉ đếm đoạn, không encode; khối in cuối lượt 1 được chép vào đây và commit trước lượt 2"
+    "locked": [
+      {"K mục tiêu": 7.5, "method": "theta", "param": 0.4, "K dev": 6.990384615384615, "đạt": true, "vec/video dev": 6.990384615384615, "độ phủ % dev": 50.76569127316611, "chồng lấn % dev": 3.007658581937807},
+      {"K mục tiêu": 10, "method": "theta", "param": 0.34, "K dev": 9.875, "đạt": true, "vec/video dev": 9.875, "độ phủ % dev": 59.38336350531753, "chồng lấn % dev": 8.89216148378575},
+      {"K mục tiêu": 14, "method": "theta", "param": 0.285, "K dev": 14.01923076923077, "đạt": true, "vec/video dev": 14.01923076923077, "độ phủ % dev": 66.93275739253382, "chồng lấn % dev": 18.45389638759841},
+      {"K mục tiêu": 18, "method": "theta", "param": 0.25, "K dev": 18.125, "đạt": true, "vec/video dev": 18.125, "độ phủ % dev": 71.67952693991208, "chồng lấn % dev": 27.621967853539054},
+      {"K mục tiêu": 22, "method": "theta", "param": 0.22, "K dev": 22.35576923076923, "đạt": true, "vec/video dev": 22.35576923076923, "độ phủ % dev": 75.917953181646, "chồng lấn % dev": 34.048358786034264}
+    ],
+    "locked_note": "khoá từ lượt 1 (PHASE dev, ô 18, lock_block_dev.json) ngày 2026-10-22; lượt 2 không chọn lại"
   },
 
   "viec5_R8": {
     "definition": "đoạn R8 = mọi đoạn R6 + với mỗi khoảng thời gian không đoạn R6 nào phủ dài >= L_min (đầu và cuối video cũng tính), cắt khoảng đó thành max(1, round(độ dài / L_fill)) cửa sổ đều (round lên ở .5) (omni_retrieval.bo_sung.fill_gaps)",
     "grid": {"L_min": [3, 5, 10], "L_fill": [7, 10, 14]},
     "rule": "R@1 dev (gallery dev 104, caption dev) cao nhất; các cấu hình kém nó < 0.3 điểm -> ít vector/video hơn, rồi R@1 cao hơn (omni_retrieval.bo_sung.pick_fill)",
-    "locked": null,
-    "locked_note": "null: lượt 1 (PHASE dev) chỉ encode và chấm lưới trên dev; {L_min, L_fill} chọn được (kèm R@1 dev, vector/video cả lưới) chép vào đây và commit trước lượt 2",
+    "locked": {"L_min": 5, "L_fill": 10},
+    "locked_note": "khoá từ lượt 1 (PHASE dev, ô 18, lock_block_dev.json) ngày 2026-10-22; lượt 2 không chọn lại",
+    "dev_grid": [
+      {"cấu hình": "r8_m03_f07", "L_min": 3, "L_fill": 7, "R@1 dev": 45.019404915912034, "vec/video dev": 29.682692307692307, "cửa sổ lấp/video dev": 22.692307692307693},
+      {"cấu hình": "r8_m03_f10", "L_min": 3, "L_fill": 10, "R@1 dev": 46.05433376455368, "vec/video dev": 23.375, "cửa sổ lấp/video dev": 16.384615384615387},
+      {"cấu hình": "r8_m03_f14", "L_min": 3, "L_fill": 14, "R@1 dev": 45.924967658473484, "vec/video dev": 19.365384615384617, "cửa sổ lấp/video dev": 12.375000000000002},
+      {"cấu hình": "r8_m05_f07", "L_min": 5, "L_fill": 7, "R@1 dev": 45.53686934023286, "vec/video dev": 28.932692307692307, "cửa sổ lấp/video dev": 21.942307692307693},
+      {"cấu hình": "r8_m05_f10", "L_min": 5, "L_fill": 10, "R@1 dev": 46.3130659767141, "vec/video dev": 22.625, "cửa sổ lấp/video dev": 15.634615384615385},
+      {"cấu hình": "r8_m05_f14", "L_min": 5, "L_fill": 14, "R@1 dev": 45.66623544631307, "vec/video dev": 18.615384615384617, "cửa sổ lấp/video dev": 11.625000000000002},
+      {"cấu hình": "r8_m10_f07", "L_min": 10, "L_fill": 7, "R@1 dev": 44.372574385511, "vec/video dev": 27.509615384615383, "cửa sổ lấp/video dev": 20.519230769230766},
+      {"cấu hình": "r8_m10_f10", "L_min": 10, "L_fill": 10, "R@1 dev": 45.66623544631307, "vec/video dev": 21.201923076923077, "cửa sổ lấp/video dev": 14.211538461538462},
+      {"cấu hình": "r8_m10_f14", "L_min": 10, "L_fill": 14, "R@1 dev": 45.019404915912034, "vec/video dev": 17.192307692307693, "cửa sổ lấp/video dev": 10.201923076923078}
+    ],
+    "dev_reference": {"R6 R@1 dev": 43.855109961190166, "R6 vec/video dev": 6.990384615384615, "R2 R@1 dev": 49.417852522639066, "R2 vec/video dev": 22.951923076923077},
     "report_val": ["R@1/5/10", "VCMR R@1", "vector/video", "độ phủ video", "tỉ lệ bỏ sót (định nghĩa việc 2)",
                    "R8 - R6, R8 - R2, R8 - R6∪R2 (CI)", "kho 498", "nhóm bỏ sót / không bỏ sót: R6, R8, R7 và R8 - R6 (CI)"],
     "miss_group": "câu có event GT với max tIoU < 0.3 so với các đoạn R6 cùng video = 'bước bị R6 bỏ sót'",
