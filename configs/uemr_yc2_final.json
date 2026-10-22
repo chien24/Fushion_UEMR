@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "date": "2026-10-22",
+  "doc": "Chốt UEMR trên YouCook2 (notebooks/uemr/UEMR_YC2_BO_SUNG.md việc 11c). Đầu vào cho UEMR 2: so sánh không cần chạy lại UEMR. Số chép nguyên từ log; nguồn: Result/uemr/YouCook_2/KET_QUA_UEMR_YC2_BO_SUNG.md (BO_SUNG) và KET_QUA_UEMR_NEW_ATHENA.md (NEW_ATHENA)",
+
+  "main_method": {
+    "name": "R8",
+    "description": "đoạn R6 (UniAV, Athena sạch) + mỗi khoảng không đoạn R6 nào phủ dài >= L_min (kể cả đầu, cuối video) cắt thành max(1, round(độ dài / L_fill)) cửa sổ đều (omni_retrieval.bo_sung.fill_gaps); Omni ft encode từng đoạn; điểm video = max cosine trên các đoạn (MaxSim)",
+    "rule": "bo_sung_protocol.json viec5_R8.switch_main_method: R8 thay R6 MaxSim chỉ khi cận dưới CI 95% của R8 - R6 trên val > 0",
+    "evidence": "R8 - R6 val 394: +2.87 [+1.63, +4.19] (uemr_yc2_bo_sung_val.ipynb ô 12)",
+    "previous": "R6 MaxSim (NEW_ATHENA mục 4, Context Fusion không qua tiêu chí: +0.23 [-0.66, +1.15])"
+  },
+
+  "params": {
+    "uniav_theta": 0.4,
+    "uniav_theta_source": "uniav_cache/athena_961f1a89/theta.json, chọn trên dev theo final_protocol",
+    "uniav_postprocess": {"k_max": 30, "d_min": 2, "merge_tiou": 0.7, "keep_at_least": 1, "code": "uniav_app.postprocess.postprocess_uemr"},
+    "L_min_s": 5,
+    "L_fill_s": 10,
+    "pool": "max",
+    "dtype": "fp16",
+    "omni": "ft",
+    "bootstrap": {"unit": "video", "n_boot": 1000, "seed": 0, "ci": 95, "code": "omni_retrieval.evaluate.paired_bootstrap"}
+  },
+
+  "checkpoints": {
+    "athena": {"path": "MyDrive/Colab Notebooks/code KL/Fushion/uemr/athena_sach/961f1a89/athena_yc2clean.pth",
+               "sha256": "961f1a895f4b43c811d3e0cfa31448641989a0a0e39e421ed397682407643d58"},
+    "omni_ft": {"path": "MyDrive/Colab Notebooks/code KL/Omni/checkpoint-1948", "sha256": "không có trong log"},
+    "omni_pt": {"name": "OmniRetriever-7B (adapter gốc), base WAVE-7B", "sha256": "không có trong log"}
+  },
+
+  "code": {
+    "fushion_commit_az": "545b861 (uemr_final_AZ_clean.ipynb, uemr_B1_uniav_athena_sach.ipynb clone)",
+    "fushion_commit_bo_sung_dev": "604221e2f4ae408abfc67b32b0728270261cf672",
+    "fushion_commit_bo_sung_val": "337eb8193f5e777ee231dac323529e91239de58e",
+    "notebooks_with_output": ["notebooks/uemr/uemr_B1_uniav_athena_sach.ipynb", "notebooks/uemr/uemr_final_AZ_clean.ipynb",
+                              "notebooks/uemr/uemr_yc2_bo_sung_dev.ipynb", "notebooks/uemr/uemr_yc2_bo_sung_val.ipynb"],
+    "uniav_output_hash8": "a793d2c4"
+  },
+
+  "protocols": {
+    "final_protocol": {"path": "configs/final_protocol.json", "sha256_16": "133125b9549bc74a"},
+    "bo_sung_protocol": {"path": "configs/bo_sung_protocol.json", "sha256_16": "12daed1203e55fea", "commit": "337eb81"}
+  },
+
+  "cache": {
+    "root": "MyDrive/Colab Notebooks/code KL/Fushion/uemr",
+    "uniav_segments": "uniav_cache/athena_961f1a89/ (segments_pred.jsonl, raw_proposals.jsonl, theta.json)",
+    "partitions_R0_R7": "omni_cache/common/partitions_a793d2c4/<partition>.json (global, uni_chunk, uni_M, rand_M, kmedoids_M, uniav_pred, gt, ...)",
+    "partitions_R8_R6K_R3K_R5b": "results/961f1a89/bo_sung/partitions_val/<name>.json (r8, r6_k075..r6_k220, r3_k075..r3_k220, r5b)",
+    "gallery_vectors_R0_R7": "omni_cache/ft/a793d2c4/segments.npz (gallery 498 video; lọc val 394 hoặc dev 104 theo video_id)",
+    "gallery_vectors_R8": "omni_cache/ft/a793d2c4_bo_sung_val/segments.npz (partition 'r8', 498 video)",
+    "gallery_vectors_R8_dev_grid": "omni_cache/ft/a793d2c4_bo_sung_dev/segments.npz (r8_m03_f07 .. r8_m10_f14, 104 video dev)",
+    "store_raw": "omni_cache/ft/raw/av (khoá seg_key); bỏ âm thanh: omni_cache/ft/raw/av_noaudio",
+    "query_vectors": "omni_cache/ft/a793d2c4/text.npz (val 3.030 caption), text_dev.npz (dev 773 caption)",
+    "per_query_ranks_val394": "results/961f1a89/ranks_val394.npz (caption_id, video_id, và một mảng thứ hạng cho mỗi partition: global, event_single, event_single_pred, uni_chunk, uni_M, rand_M, kmedoids_M, uniav_pred, gt, uni_M_gt, uniav_shift, gt_shift, uniav_pred+uni_chunk)",
+    "per_query_ranks_R8": "không có file; tính lại không encode: ranks(segments.npz của a793d2c4_bo_sung_val, 'r8') như uemr_yc2_bo_sung_val.ipynb ô 3 (load_index + video_ranks)",
+    "per_query_ranks_dev_and_498": "không có file; tính lại từ segments.npz + text_dev.npz / text.npz như trên",
+    "results_dirs": ["results/961f1a89/", "results/961f1a89/bo_sung/"]
+  },
+
+  "reference": {
+    "note": "UEMR 2 so với các dòng này bằng paired bootstrap theo video trên cùng caption; vector/video tính trên val 394",
+    "val394": {
+      "R8 (main)": {"R@1": 27.39, "R@5": 56.86, "R@10": 70.86, "VCMR_R@1_tIoU0.5": 14.32, "vec_per_video": 22.15, "coverage_pct": 97.44, "miss_event_pct": 14.19, "R@1_gallery498": 25.05, "source": "bo_sung val ô 12"},
+      "R6 uniav_pred": {"R@1": 24.52, "R@5": 51.72, "R@10": 64.69, "VCMR_R@1_tIoU0.5": 15.97, "vec_per_video": 7.52, "coverage_pct": 52.22, "miss_event_pct": 27.16, "R@1_gallery498": 22.41, "source": "bo_sung val ô 12; AZ ô 18"},
+      "R2 uni_chunk": {"R@1": 27.16, "R@5": 58.88, "R@10": 73.40, "VCMR_R@1_tIoU0.5": 9.87, "vec_per_video": 22.66, "R@1_gallery498": 24.36, "source": "AZ ô 18; bo_sung dev ô 6"},
+      "R6 ∪ R2": {"R@1": 29.90, "R@5": 62.11, "R@10": 76.27, "VCMR_R@1_tIoU0.5": 15.02, "vec_per_video": 30.18, "R@1_gallery498": 27.06, "source": "AZ ô 18; bo_sung dev ô 6"},
+      "R7 gt (oracle)": {"R@1": 37.52, "R@5": 69.80, "R@10": 80.96, "VCMR_R@1_tIoU0.5": 35.64, "vec_per_video": 7.69, "R@1_gallery498": "không có trong log", "source": "AZ ô 18"},
+      "R6_K (θ thấp hơn, không phải phương pháp chính)": {"θ 0.25": {"R@1": 29.67, "vec_per_video": 18.72}, "θ 0.22": {"R@1": 29.97, "vec_per_video": 22.92}, "source": "bo_sung val ô 11"}
+    },
+    "dev104": {
+      "R8 (main)": {"R@1": 46.3130659767141, "vec_per_video": 22.625, "source": "bo_sung dev ô 12"},
+      "R6 uniav_pred": {"R@1": 43.855109961190166, "vec_per_video": 6.990384615384615, "source": "bo_sung dev ô 12"},
+      "R2 uni_chunk": {"R@1": 49.417852522639066, "vec_per_video": 22.951923076923077, "source": "bo_sung dev ô 12"},
+      "R@5, R@10, VCMR, R6 ∪ R2, R7 trên dev": "không có trong log"
+    },
+    "pairs_val394": {
+      "R8 - R6": "+2.87 [+1.63, +4.19]", "R8 - R2": "+0.23 [-1.61, +2.09]", "R8 - R6 ∪ R2": "-2.51 [-4.03, -1.05]",
+      "R6 - R3": "+6.50 [+4.51, +8.47]", "R6 - R0": "+16.20 [+14.26, +18.22]", "R6 - R2": "-2.64 [-4.70, -0.57]",
+      "R6 ∪ R2 - R2": "+2.74 [+1.51, +3.87]", "R7 - R6": "+13.00 [+11.10, +14.90]"
+    }
+  },
+
+  "not_done_on_yc2": [
+    {"what": "HT-Step", "why": "bộ dữ liệu thứ hai làm riêng, ngoài phạm vi UEMR YC2"},
+    {"what": "Athena không thầy Omni", "why": "Athena sạch vẫn distill từ Omni pt; chưa có thí nghiệm train không thầy"},
+    {"what": "Context Fusion mục 8b với Athena sạch (cột (c) cho R1_pred, R2, R4, R5, uni_M_gt; Exp 3 có fusion)", "why": "cờ RUN_EXTRA_FUSION, RUN_EXP3_FUSION = False ở AZ; CF trên R6 không qua tiêu chí"},
+    {"what": "Việc 9: CLIP ViT-L/14 zero-shot", "why": "ô tự bỏ qua: dòng kiểm open_clip.__version__ lỗi AttributeError (val ô 16); không chạy lại"},
+    {"what": "Context Fusion trên R8", "why": "không nằm trong bo_sung_protocol"}
+  ]
+}
