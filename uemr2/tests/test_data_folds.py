@@ -2,6 +2,7 @@
 import json
 
 import numpy as np
+import pytest
 
 from omni_retrieval.evaluate import load_text, text_to_clip
 from omni_retrieval.manifest import seg_key
@@ -76,9 +77,14 @@ def test_folds(tmp_path):
     (tmp_path / "configs").mkdir()
     (tmp_path / Fo.ANNO).write_text(json.dumps({"database": db}))
     (tmp_path / Fo.CONFIG).write_text("dataset:\n  json_file: ./data/youcookii/annotations/youcookii_annotations_yc2clean.json\n")
-    r = Fo.write_folds(tmp_path, vids, exclude={"d0", "x0"})
+    r = Fo.write_folds(tmp_path, vids, exclude={"d0", "x0"}, athena_train=set(vids), n_expected=11)
     assert (len(r["A"]), len(r["B"])) == (6, 5) and sorted(r["A"] + r["B"]) == vids
-    assert r == Fo.write_folds(tmp_path, vids)                 # deterministic
+    assert r == Fo.write_folds(tmp_path, vids, n_expected=11)  # deterministic
+    for bad in (dict(athena_train=set(vids[:-1])), dict(exclude={vids[0]}), dict(n_expected=1002)):
+        with pytest.raises(AssertionError):
+            Fo.write_folds(tmp_path, vids, **{"n_expected": 11, **bad})
+    with pytest.raises(AssertionError):
+        Fo.write_folds(tmp_path, vids + vids[:1], n_expected=None)   # duplicate id
     a = json.loads((tmp_path / r["files"]["A"]["annotation"]).read_text())["database"]
     assert sorted(v for v, x in a.items() if x["subset"] == "training") == r["A"]
     assert a["nofeat1"]["subset"] == "holdout" and a["d0"]["subset"] == "dev" and a["x0"]["subset"] == "validation"
