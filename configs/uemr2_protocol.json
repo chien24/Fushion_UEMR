@@ -1,0 +1,442 @@
+{
+ "version": 1,
+ "dataset": "YouCook2",
+ "spec": "docs/uemr2/UEMR_ALIGN_FINAL.md (2026-10-23)",
+ "checkpoints": {
+  "athena": {
+   "path": "/content/drive/MyDrive/Colab Notebooks/code KL/Fushion/uemr/athena_sach/961f1a89/athena_yc2clean.pth",
+   "sha256": "961f1a895f4b43c811d3e0cfa31448641989a0a0e39e421ed397682407643d58",
+   "run": "yc2clean_E1"
+  },
+  "fold_A": {
+   "checkpoint": "/content/drive/MyDrive/Colab Notebooks/code KL/Fushion/uemr_2/athena_folds/ec46b253/athena_yc2clean_foldA.pth",
+   "sha256": "ec46b25345d9bcee1c5c70efed28e9fdc80a28f794a7999ca35b2239851ef92d",
+   "run": "yc2clean_foldA",
+   "epoch (best_cap, CIDEr dev)": 7,
+   "annotation_sha256": "2090387cfb1382cc7cfce552f156d573bfc01bc901b0a0df826cc28ddad5ceee"
+  },
+  "fold_B": {
+   "checkpoint": "/content/drive/MyDrive/Colab Notebooks/code KL/Fushion/uemr_2/athena_folds/dc479e03/athena_yc2clean_foldB.pth",
+   "sha256": "dc479e0304c843a5526580a9081906828f04d9beb01ca57b5ae4adb6769ab174",
+   "run": "yc2clean_foldB",
+   "epoch (best_cap, CIDEr dev)": 10,
+   "annotation_sha256": "a812fb8a49417f71073c2ad6a34a769e99232e1865d51970eba823b19b7cb067"
+  },
+  "omni_ft": "checkpoint-1948 (vector có sẵn trong cache UEMR)"
+ },
+ "folds": {
+  "seed": 0,
+  "source": "train_omni_video.trainsplit.jsonl",
+  "manifest_sha256": "e7ad8aee9a2d17e2845b73ada79930323ed4445d6d3ebe57a14a573b6d0b257b",
+  "A": 501,
+  "B": 501,
+  "athena_commit": "cd11ee8d68ddac958277c7fbd49c49f1dcd0dcb2"
+ },
+ "segments": {
+  "main_row": "R8",
+  "uniav_hash8": "a793d2c4",
+  "theta": 0.4,
+  "L_min_s": 5,
+  "L_fill_s": 10
+ },
+ "train": {
+  "hyper": {
+   "epochs": 30,
+   "batch": 512,
+   "lr": 0.001,
+   "wd": 0.0001,
+   "patience": 5,
+   "alpha": 0.5,
+   "tau_soft": 0.02,
+   "optimizer": "AdamW, cosine theo bước",
+   "lambda_txt": 1.0,
+   "tiou_false_negative": 0.5,
+   "caption_tiou_r6": 0.5,
+   "precision": "fp32 train, h̄ fp16"
+  },
+  "seeds": [
+   0,
+   1,
+   2
+  ],
+  "dev_criterion": "R@1 dev (104 video, 773 câu), đoạn R8, điểm <t, h> (S^A)",
+  "data": {
+   "rows": 15589,
+   "gt rows": 7787,
+   "r6 rows": 7802,
+   "r6 with caption": 5255,
+   "r6 without caption": 2547,
+   "captions": 7787,
+   "unique captions (pool)": 7509
+  },
+  "runs": {
+   "U": {
+    "variant": {
+     "q": "cf"
+    },
+    "best_epoch": [
+     5,
+     4,
+     5
+    ],
+    "best_dev_R@1": [
+     30.9185,
+     31.6947,
+     31.5653
+    ],
+    "tau_av": [
+     0.05959,
+     0.06151,
+     0.05959
+    ],
+    "tau_txt": [
+     0.0599,
+     0.06175,
+     0.0599
+    ]
+   },
+   "A1": {
+    "variant": {
+     "q": "961"
+    },
+    "best_epoch": [
+     11,
+     5,
+     7
+    ],
+    "best_dev_R@1": [
+     33.8939,
+     34.6701,
+     33.7646
+    ],
+    "tau_av": [
+     0.05081,
+     0.05967,
+     0.05626
+    ],
+    "tau_txt": [
+     0.05152,
+     0.05999,
+     0.05674
+    ]
+   },
+   "A2": {
+    "variant": {
+     "q": "cf",
+     "lam_txt": 0.0
+    },
+    "best_epoch": [
+     3,
+     3,
+     3
+    ],
+    "best_dev_R@1": [
+     26.7788,
+     26.3907,
+     27.6843
+    ],
+    "tau_av": [
+     0.06353,
+     0.06353,
+     0.06354
+    ],
+    "tau_txt": [
+     0.07,
+     0.07,
+     0.07
+    ]
+   },
+   "A3": {
+    "variant": {
+     "q": "cf",
+     "no_av": true
+    },
+    "best_epoch": [
+     4,
+     4,
+     3
+    ],
+    "best_dev_R@1": [
+     30.401,
+     31.0479,
+     31.0479
+    ],
+    "tau_av": [
+     0.07,
+     0.07,
+     0.07
+    ],
+    "tau_txt": [
+     0.06184,
+     0.06184,
+     0.0638
+    ]
+   },
+   "A4": {
+    "variant": {
+     "q": "cf",
+     "no_fn": true
+    },
+    "best_epoch": [
+     5,
+     4,
+     5
+    ],
+    "best_dev_R@1": [
+     31.0479,
+     31.6947,
+     31.6947
+    ],
+    "tau_av": [
+     0.0596,
+     0.06151,
+     0.0596
+    ],
+    "tau_txt": [
+     0.0599,
+     0.06175,
+     0.0599
+    ]
+   }
+  }
+ },
+ "beta_grid": [
+  0,
+  0.1,
+  0.2,
+  0.3,
+  0.5,
+  0.75,
+  1.0
+ ],
+ "beta_star": 0.1,
+ "beta_I_star": 0.3,
+ "dev_grid_U": [
+  {
+   "beta": 0,
+   "R@1": 46.3131,
+   "R@5": 81.63,
+   "R@10": 91.3325,
+   "MdR": 2.0,
+   "MnR": 4.1889,
+   "VCMR@1": 24.5796,
+   "mom@.5|top1": 53.0726
+  },
+  {
+   "beta": 0.1,
+   "R@1": 48.1242,
+   "R@5": 83.1824,
+   "R@10": 91.3325,
+   "MdR": 2.0,
+   "MnR": 3.8629,
+   "VCMR@1": 26.2613,
+   "mom@.5|top1": 54.5699
+  },
+  {
+   "beta": 0.2,
+   "R@1": 46.9599,
+   "R@5": 82.4062,
+   "R@10": 91.2031,
+   "MdR": 2.0,
+   "MnR": 3.9366,
+   "VCMR@1": 25.4851,
+   "mom@.5|top1": 54.27
+  },
+  {
+   "beta": 0.3,
+   "R@1": 45.6662,
+   "R@5": 81.63,
+   "R@10": 91.2031,
+   "MdR": 2.0,
+   "MnR": 4.1539,
+   "VCMR@1": 25.097,
+   "mom@.5|top1": 54.9575
+  },
+  {
+   "beta": 0.5,
+   "R@1": 45.0194,
+   "R@5": 81.1125,
+   "R@10": 90.2975,
+   "MdR": 2.0,
+   "MnR": 4.5563,
+   "VCMR@1": 25.7439,
+   "mom@.5|top1": 57.1839
+  },
+  {
+   "beta": 0.75,
+   "R@1": 42.9495,
+   "R@5": 79.9483,
+   "R@10": 89.6507,
+   "MdR": 2.0,
+   "MnR": 4.8965,
+   "VCMR@1": 24.0621,
+   "mom@.5|top1": 56.0241
+  },
+  {
+   "beta": 1.0,
+   "R@1": 41.9146,
+   "R@5": 78.9133,
+   "R@10": 88.6158,
+   "MdR": 2.0,
+   "MnR": 5.1824,
+   "VCMR@1": 23.0272,
+   "mom@.5|top1": 54.9383
+  }
+ ],
+ "dev_grid_e": [
+  {
+   "beta": 0,
+   "R@1": 46.3131,
+   "R@5": 81.63,
+   "R@10": 91.3325,
+   "MdR": 2.0,
+   "MnR": 4.1889,
+   "VCMR@1": 24.5796,
+   "mom@.5|top1": 53.0726
+  },
+  {
+   "beta": 0.1,
+   "R@1": 47.9948,
+   "R@5": 83.053,
+   "R@10": 91.2031,
+   "MdR": 2.0,
+   "MnR": 3.9521,
+   "VCMR@1": 26.0026,
+   "mom@.5|top1": 54.1779
+  },
+  {
+   "beta": 0.2,
+   "R@1": 49.1591,
+   "R@5": 82.5356,
+   "R@10": 91.4618,
+   "MdR": 2.0,
+   "MnR": 3.8124,
+   "VCMR@1": 26.2613,
+   "mom@.5|top1": 53.4211
+  },
+  {
+   "beta": 0.3,
+   "R@1": 49.6766,
+   "R@5": 82.9237,
+   "R@10": 91.5912,
+   "MdR": 2.0,
+   "MnR": 3.771,
+   "VCMR@1": 26.7788,
+   "mom@.5|top1": 53.9062
+  },
+  {
+   "beta": 0.5,
+   "R@1": 48.2536,
+   "R@5": 82.5356,
+   "R@10": 92.1087,
+   "MdR": 2.0,
+   "MnR": 3.7995,
+   "VCMR@1": 26.0026,
+   "mom@.5|top1": 53.8874
+  },
+  {
+   "beta": 0.75,
+   "R@1": 47.6067,
+   "R@5": 81.8887,
+   "R@10": 91.7206,
+   "MdR": 2.0,
+   "MnR": 3.9599,
+   "VCMR@1": 25.7439,
+   "mom@.5|top1": 54.0761
+  },
+  {
+   "beta": 1.0,
+   "R@1": 45.7956,
+   "R@5": 80.5951,
+   "R@10": 90.2975,
+   "MdR": 2.0,
+   "MnR": 4.1798,
+   "VCMR@1": 25.2264,
+   "mom@.5|top1": 55.0847
+  }
+ ],
+ "zstats_dev_R8": {
+  "omega": {
+   "mu": 0.036243241280317307,
+   "sd": 0.03923393040895462
+  },
+  "iv2": {
+   "mu": -0.0018238769844174385,
+   "sd": 0.17587949335575104
+  }
+ },
+ "rules": {
+  "beta": "R@1 dev cao nhất trên dòng R8, hoà lấy β nhỏ hơn; áp nguyên cho mọi dòng",
+  "val": "gallery val 394, 3.030 câu, chấm một lần; kho 498 một dòng phụ",
+  "bootstrap": {
+   "unit": "video",
+   "n_boot": 1000,
+   "seed": 0,
+   "ci": 95,
+   "code": "uemr2_core.paired_bootstrap"
+  },
+  "criteria": {
+   "1": "lo CI (U) - R8 (R@1 val 394) > 0 -> UEMR 2 là phương pháp chính YC2",
+   "2": "lo CI (U) - (e) trên R8 > 0 -> căn chỉnh tốt hơn gộp thẳng hai không gian",
+   "3": "lo CI C1 - R6 > 0 -> căn chỉnh thay được Omni ở đoạn lấp",
+   "4": "VCMR (U) - R8 kèm CI, không ngưỡng",
+   "5": "β* = 0 -> dừng nhánh (U), báo cáo val với β = 0, vẫn chạy (h) và C1",
+   "6": "kiểm tra 7.4 không qua -> dừng"
+  }
+ },
+ "cache": {
+  "q gallery": "9b5884396932e36c",
+  "q train": "322f2748834fa32a",
+  "q foldA": "a03894e700041eea",
+  "q foldB": "231e28eff652422a",
+  "u val": "45b58692ca949011",
+  "u dev": "739444a18b7ab75d",
+  "h̄ U": "0f4a79b040912f69",
+  "h̄ A1": "614915bbebbb4341",
+  "h̄ A2": "5fe84852adc32804",
+  "h̄ A3": "f6481293cd1b440b",
+  "h̄ A4": "23dcfa412d1c2fb7",
+  "P_phi U seed0": "f04d4dbfb30a01b6",
+  "P_phi U seed1": "7f72ff89f3b903a8",
+  "P_phi U seed2": "7af2a43a2eeb45cb",
+  "P_phi A1 seed0": "f89b73a98601cb7c",
+  "P_phi A1 seed1": "73e92cd72674b01e",
+  "P_phi A1 seed2": "13301df5ed3805c7",
+  "P_phi A2 seed0": "09361c8e9e2a045f",
+  "P_phi A2 seed1": "58bfce691702dfb8",
+  "P_phi A2 seed2": "8b592058fa292a2d",
+  "P_phi A3 seed0": "64f90f03462073ac",
+  "P_phi A3 seed1": "c9c0b418800a54c2",
+  "P_phi A3 seed2": "5649a476ad10827f",
+  "P_phi A4 seed0": "db96abbbe4693553",
+  "P_phi A4 seed1": "8cd391c13d43a8bb",
+  "P_phi A4 seed2": "24b188c15f8f0443"
+ },
+ "clip_dev": {
+  "e (Omni ft)": {
+   "R@1": 56.4036,
+   "R@5": 84.2173,
+   "R@10": 91.2031,
+   "MdR": 1.0,
+   "clips": 773
+  },
+  "h̄ (U)": {
+   "R@1": 29.6248,
+   "R@5": 65.3299,
+   "R@10": 77.1022,
+   "MdR": 3.0,
+   "clips": 773
+  },
+  "q (với u)": {
+   "R@1": 30.5304,
+   "R@5": 60.414,
+   "R@10": 72.8331,
+   "MdR": 3.0,
+   "clips": 773
+  }
+ },
+ "code": {
+  "fushion_commit_dev": "bde1ed2fb2012300c22451bd5b2833e36fabbb31",
+  "athena_commit": "cd11ee8d68ddac958277c7fbd49c49f1dcd0dcb2"
+ }
+}
