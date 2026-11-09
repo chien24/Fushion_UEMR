@@ -1,6 +1,9 @@
 {
- "version": 1,
+ "version": 2,
  "date": "2026-11-09",
+ "changes": [
+  "v2 (2026-11-09), quyết định TRƯỚC khi chấm val, vì sha256 adapter thầy khác best: bật cột (S), (U), C1 với text của Omni thầy; thêm kiểm encode_av của thầy, dòng tham chiếu teacher / student"
+ ],
  "doc": "docs/uemr/HTSTEP_UEMR_OMNI_UNIAV.md",
  "branch": "htstep",
  "scope": "UEMR trên HT-Step val_seen với UniAV HT-Step (article dự đoán) và Omni HT-Step LoRA best; không train, không fine-tune; val chấm một lần",
@@ -23,30 +26,46 @@
    "commit": "ab772eb",
    "note": "bản materialize (LoRA best + head pt) mà eval_htstep.py đã chấm; ckpt/best trên Drive chỉ có lora_only.safetensors"
   },
-  "omni_pt": {
-   "repo": "nguyenminh04/omni-adapters",
-   "dir": "omniretriever-7b",
-   "file": "adapter_model.safetensors",
-   "sha256": "31e81f1c43ad7b3b37b5155ad84db9f87d28128cef9ea6c02e6c3d22df380143"
-  },
   "omni_teacher": {
    "repo": "nguyenminh04/omni-adapters",
    "dir": "checkpoint",
    "file": "lora_only.safetensors",
    "sha256": "b364ad23243887ce8555740f64f9c5df7b39a017bb8ed5c730409e4eb4df01df",
+   "adapter_sha256": "a6f7a92f8fd00608fc2c4b4b4a7afe0cf45b63f94e3f2e65110b801794b2c61a",
+   "adapter_note": "adapter_model.safetensors đầy đủ (LoRA checkpoint + head omniretriever-7b, scripts/materialize_adapter.py), cùng dạng với sha256 của omni_best",
+   "code": "https://github.com/im-xiaoming/Omni-Retriever-Custom",
+   "branch": "htstep-av-extract",
+   "commit": "57a7f1f",
+   "env": "transformers 4.57.3, peft 0.20.0 (README nhánh htstep-av-extract), venv riêng",
+   "text": "OmniRetriever.encode_text, batch 1 (scripts/eval_htstep_av.py)",
    "encode": "encode_av: PyAV, 8 khung, 224 px rồi processor min_pixels 100352 lên 336 px (config.json của htstep-omni-av)"
+  },
+  "omni_pt": {
+   "repo": "nguyenminh04/omni-adapters",
+   "dir": "omniretriever-7b",
+   "file": "adapter_model.safetensors",
+   "sha256": "31e81f1c43ad7b3b37b5155ad84db9f87d28128cef9ea6c02e6c3d22df380143"
   }
  },
  "student": {
-  "enabled": false,
-  "text_adapter": null,
-  "reason": "plan 3.2: 0/168 tensor LoRA của thầy (omni-adapters/checkpoint) trùng best; (S), (U), C1 và T4, T5 chỉ chạy khi user quyết định",
-  "evidence": "so tensor trên 168 khoá LoRA: 0 trùng, max |diff| 0.0081 trên tensor std 0.011"
+  "enabled": true,
+  "text_adapter": "omni_teacher",
+  "reason": "plan 3.2: 0/168 tensor LoRA của thầy (omni-adapters/checkpoint) trùng best, nên vector student nằm trong không gian của thầy, khác không gian best",
+  "evidence": "so tensor trên 168 khoá LoRA: 0 trùng, max |diff| 0.0081 trên tensor std 0.011; sha256 adapter thầy khác best (models)",
+  "decision": "2026-11-09, user: chạy cột student với text của thầy; quyết định trước khi chấm val"
  },
+ "columns": {
+  "b": "text Omni best · vector AV Omni best của đoạn",
+  "S": "text Omni thầy · vector student (span head Omni của UniAV trên đoạn, chế độ article dự đoán)",
+  "U": "(b) + 0.1 × (S): cộng điểm của HAI KHÔNG GIAN khác nhau (best và thầy); β = 0.1 lấy từ YC2, không chọn lại",
+  "C1": "đoạn R6 chấm (b), đoạn lấp của R8 chấm (S); giữ nguyên định nghĩa, ghi chú: điểm đến từ hai bộ mã hoá (best và thầy)",
+  "log": "in phân bố điểm (mean, std) của (b) và (S); không chuẩn hoá thêm"
+ },
+ "reference_teacher_student": "tham chiếu, không thành tiêu chí: text -> clip trên clip GT val có vector teacher (omni_av/), text thầy · vector teacher so với text thầy · vector student trên cùng clip; cho biết student kém thầy bao nhiêu",
  "encoding": {
   "clip": "omni_retrieval.encode (LazySupervisedDataset, decord, 8 khung, 224 px = min/max_pixels 50176, tiếng 8 s, batch 1): đường train/eval của Omni LoRA; third_party/omni_fix chỉ khác htstep_lora ở nhánh clip cắt sẵn",
   "text": "omni_retrieval.encode.encode_texts (text + <|im_end|>, last hidden, last token)",
-  "note": "plan viết encode_av; encode_av là đường của thầy (336 px, PyAV) nên không thể đạt cos >= 0.999 với val_embeds_best.npz (224 px, decord); ô 9 đo cos của đường này"
+  "note": "plan viết encode_av; encode_av là đường của thầy (336 px, PyAV) nên không thể đạt cos >= 0.999 với val_embeds_best.npz (224 px, decord); ô 9 đo cos của đường này. Riêng text và kiểm vector của thầy dùng đúng đường của thầy."
  },
  "data": {
   "annotations": {
@@ -1125,7 +1144,16 @@
   },
   "durations_note": "s = frames / avg fps từ header mp4 (ffprobe cùng công thức ở ô 5, lệch <= 0.1 s là OK)",
   "uniav_raw_sha256": "99c0c980f3248acf6dc7a0fd6f80800829ce340bc5bf51cc2582a5ee4f44ba24",
-  "uniav_cache_dir": "uniav/a7c46353"
+  "uniav_cache_dir": "uniav/a7c46353",
+  "student_sha256": {
+   "r0": "917ce77774caa9b05836dcf238efbe4712709c76d958c93d991fb990f8816548",
+   "r2": "674597c8bdd06e3661abc491fa3369b69de9f67b45c0e543f111fbb8a236c88a",
+   "r3": "afc054b682b892ac2416471802fbaf11ccf66bc4e29abac06c0b08de4838d5d5",
+   "r6": "a8fc9a9a60b394a5575b5d7099441c692170ddfaeebc917d7b2a8a41b0bb3b76",
+   "r8": "ccc84cc319f890c31785a95971bbd84ba3464c4d263540917a4bf828b6094141",
+   "r6gt": "9e640eb1044802881ea8c0ed0fcfc7af8db996b7f5d92f9c71bf1c65a8548adc",
+   "r7": "e4315ecfc2c8c009367632ab182c22bf4bde9c25124e3d5efdd384f9399568f0"
+  }
  },
  "params": {
   "article": "top-1 của article_head (uemr_htstep.uniav_htstep.predict mode='pred')",
@@ -1164,7 +1192,8 @@
   "mean_k": 5.8843137254901965,
   "chunk_sec": 11.91,
   "clips_r8": 16920,
-  "clips_r2": 16914
+  "clips_r2": 16914,
+  "parts_sha256": "51ba4376ec1e1396cf498ce94c9252df821e2374d2f88a2bf6d02828905ba50c"
  },
  "eval": {
   "modes": [
@@ -1234,12 +1263,12 @@
   "T4": {
    "test": "ci_low((U) - (b)) > 0 trên R8",
    "needs_student": true,
-   "sentence": "Vector student bổ sung được cho Omni"
+   "sentence": "Vector student bổ sung được cho Omni (không gian Omni thầy)"
   },
   "T5": {
    "test": "ci_low(C1 - R6) > 0",
    "needs_student": true,
-   "sentence": "Vector student thay được Omni ở đoạn lấp"
+   "sentence": "Vector student thay được Omni ở đoạn lấp (không gian Omni thầy)"
   },
   "T6": {
    "test": "chỉ báo, không ngưỡng",
@@ -1279,6 +1308,8 @@
    "csv_matched_pct": 99.25,
    "note": "local CPU, 2026-11-09; OmniCos trên 1080 đoạn có teacher (179 video có omni_av/)"
   },
-  "omni_clip_cos_min": 0.999
+  "omni_clip_cos_min": 0.999,
+  "teacher_clip_cos_min": 0.999,
+  "teacher_clip_check": "ô 9, một lần nạp Omni thầy: encode_av trên 20 clip GT val, cos với htstep-val-seen-feats/omni_av/ >= 0.999, không đạt thì dừng"
  }
 }

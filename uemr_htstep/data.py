@@ -89,5 +89,42 @@ def headline_stats(captions: list[dict], top: int = 20) -> dict:
             "top": [{"text": h, "videos": len(s)} for h, s in sorted(vids.items(), key=lambda kv: (-len(kv[1]), kv[0]))[:top]]}
 
 
+def teacher_vectors(folder) -> dict:
+    """``htstep-val-seen-feats/omni_av/``: ``{(video, start, end rounded to 1 ms): {npz, row, segment, emb}}`` of every GT
+    segment that has a teacher vector."""
+    out = {}
+    for p in sorted(Path(folder).glob("*.npz")):
+        with np.load(p) as z:
+            for row, (seg, emb) in enumerate(zip(z["segment"], z["emb"])):
+                out[(p.stem, round(float(seg[0]), 3), round(float(seg[1]), 3))] = {"npz": str(p), "row": row,
+                                                                                    "segment": [float(seg[0]), float(seg[1])],
+                                                                                    "emb": emb.astype(np.float32)}
+    return out
+
+
+def teacher_queries(captions: list[dict], val_rows: list[dict], teacher: dict) -> tuple[list[int], dict]:
+    """``(indices of the queries whose GT step has a teacher vector, {gt_seg_key: teacher vector})``; the manifest's
+    ``segment`` is the annotated window the teacher was encoded on."""
+    segment = {r["id"]: r["segment"] for r in val_rows}
+    keep, by_clip = [], {}
+    for i, c in enumerate(captions):
+        s = segment[c["caption_id"]]
+        hit = teacher.get((c["video_id"], round(float(s[0]), 3), round(float(s[1]), 3)))
+        if hit is not None:
+            keep.append(i)
+            by_clip[c["gt_seg_key"]] = hit["emb"]
+    return keep, by_clip
+
+
+def smoke_videos(teacher: dict, durations: dict, av1, n_teacher: int = 4, min_clips: int = 5) -> list[str]:
+    """The videos of the smoke run: the ``n_teacher`` shortest with at least ``min_clips`` teacher clips (the teacher and
+    encode checks need 20 clips) and the shortest AV1 video (the transcode path)."""
+    rows = defaultdict(int)
+    for v, _, _ in teacher:
+        rows[v] += 1
+    cand = sorted((v for v, n in rows.items() if n >= min_clips and v in durations), key=lambda v: (durations[v], v))
+    return sorted(set(cand[:n_teacher]) | set(sorted((v for v in av1 if v in durations), key=lambda v: (durations[v], v))[:1]))
+
+
 def write_ids(path, ids) -> None:
     Path(path).write_text("".join(f"{v}\n" for v in ids), encoding="utf-8", newline="\n")

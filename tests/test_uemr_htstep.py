@@ -67,6 +67,40 @@ def test_headline_stats():
     assert s["top"][0] == {"text": "cook rice add salt", "videos": 2}
 
 
+def teacher_dir(tmp_path):
+    np.savez(tmp_path / "a.npz", segment=np.array([[10.0, 20.0], [30.0, 40.0]]), emb=np.array([[1, 0], [0, 1]], np.float16))
+    np.savez(tmp_path / "b.npz", segment=np.array([[5.0, 15.0]]), emb=np.array([[3, 4]], np.float16))
+    return tmp_path
+
+
+def test_teacher_vectors_and_queries(tmp_path):
+    teacher = data.teacher_vectors(teacher_dir(tmp_path))
+    assert set(teacher) == {("a", 10.0, 20.0), ("a", 30.0, 40.0), ("b", 5.0, 15.0)}
+    assert teacher[("a", 30.0, 40.0)]["row"] == 1 and teacher[("a", 30.0, 40.0)]["emb"].tolist() == [0.0, 1.0]
+    rows = [dict(r, segment=r["window"]) for r in manifest()]
+    caps = data.queries(rows, ["a", "b", "c"])
+    keep, by_clip = data.teacher_queries(caps, rows, teacher)
+    assert [caps[i]["caption_id"] for i in keep] == ["a#0", "a#1", "b#0"]       # a#2 and c#0 have no teacher vector
+    assert set(by_clip) == {"a__10.00_20.00", "a__30.00_40.00", "b__5.00_15.00"}
+
+
+def test_smoke_videos_cover_teacher_clips_and_av1():
+    teacher = {(v, float(i), float(i + 1)): {} for v, n in (("long", 9), ("s1", 5), ("s2", 6), ("few", 2), ("s3", 5), ("s4", 7)) for i in range(n)}
+    dur = {"long": 900.0, "s1": 10.0, "s2": 20.0, "few": 1.0, "s3": 30.0, "s4": 40.0, "av1": 50.0, "av1b": 60.0}
+    assert data.smoke_videos(teacher, dur, {"av1b", "av1"}) == ["av1", "s1", "s2", "s3", "s4"]
+
+
+def test_teacher_clip_check_stops_below_the_threshold(tmp_path):
+    from uemr_htstep.teacher_encode import check_clips
+
+    np.savez(tmp_path / "a.npz", emb=np.array([[1, 0], [0, 1]], np.float16))
+    clips = [{"id": "x", "npz": str(tmp_path / "a.npz"), "row": 0}, {"id": "y", "npz": str(tmp_path / "a.npz"), "row": 1}]
+    good = check_clips(lambda c: {"x": [2, 0], "y": [0, 3]}[c["id"]], clips, 0.999)
+    assert good["ok"] and good["min"] == pytest.approx(1.0) and good["n"] == 2
+    bad = check_clips(lambda c: {"x": [1, 0], "y": [1, 1]}[c["id"]], clips, 0.999)
+    assert not bad["ok"] and set(bad["below"]) == {"y"}
+
+
 # ---------------------------------------------------------------- partitions and the rules of §4.2
 
 
