@@ -90,15 +90,32 @@ def test_smoke_videos_cover_teacher_clips_and_av1():
     assert data.smoke_videos(teacher, dur, {"av1b", "av1"}) == ["av1", "s1", "s2", "s3", "s4"]
 
 
-def test_teacher_clip_check_stops_below_the_threshold(tmp_path):
-    from uemr_htstep.teacher_encode import check_clips
+def test_stored_cos_reads_the_right_row(tmp_path):
+    from uemr_htstep.teacher_encode import stored_cos
 
     np.savez(tmp_path / "a.npz", emb=np.array([[1, 0], [0, 1]], np.float16))
     clips = [{"id": "x", "npz": str(tmp_path / "a.npz"), "row": 0}, {"id": "y", "npz": str(tmp_path / "a.npz"), "row": 1}]
-    good = check_clips(lambda c: {"x": [2, 0], "y": [0, 3]}[c["id"]], clips, 0.999)
-    assert good["ok"] and good["min"] == pytest.approx(1.0) and good["n"] == 2
-    bad = check_clips(lambda c: {"x": [1, 0], "y": [1, 1]}[c["id"]], clips, 0.999)
-    assert not bad["ok"] and set(bad["below"]) == {"y"}
+    cos, vecs = stored_cos(lambda c: {"x": [2, 0], "y": [1, 1]}[c["id"]], clips)
+    assert cos["x"] == pytest.approx(1.0) and cos["y"] == pytest.approx(2 ** -0.5) and set(vecs) == {"x", "y"}
+
+
+def test_teacher_check_conditions():
+    from uemr_htstep.teacher_encode import judge
+
+    run = lambda t, b: judge(dict(enumerate(t)), dict(enumerate(b)), min_mean=0.999, min_clip=0.995, ratio=10, list_below=0.999)
+    one_off = run([0.9999, 0.9999, 0.9985, 0.9999], [0.98, 0.98, 0.97, 0.98])     # one clip off at decoding level: listed, not fatal
+    assert one_off["ok"] and set(one_off["below"]) == {2}
+    assert not run([0.9999, 0.9999], [0.98, 0.9999])["discriminates"]             # tie on one clip: not closer
+    close = run([0.9995, 0.9995], [0.9990, 0.9990])                               # best is closer than 10x of the teacher's gap
+    assert close["gap_ratio"] == pytest.approx(2.0) and not close["discriminates"] and not close["ok"] and close["absolute"]
+    assert not run([0.9999, 0.9949], [0.90, 0.90])["absolute"]                    # one clip under the 0.995 bar
+    assert not run([0.9985, 0.9985], [0.90, 0.90])["absolute"]                    # mean under 0.999
+
+
+def test_pairwise_cos_of_repeats():
+    from uemr_htstep.teacher_encode import pairwise_cos
+
+    assert pairwise_cos([[1, 0], [2, 0], [1, 1]]) == pytest.approx([1.0, 2 ** -0.5, 2 ** -0.5])
 
 
 # ---------------------------------------------------------------- partitions and the rules of §4.2

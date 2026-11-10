@@ -1,7 +1,8 @@
 {
- "version": 3,
+ "version": 4,
  "date": "2026-11-09",
  "changes": [
+  "v4 (2026-11-10), quyết định của user TRƯỚC khi chấm val (chưa chỉ số truy hồi nào được chấm): thay ngưỡng kiểm adapter thầy (0.999 mỗi clip) bằng phép phân biệt thầy / best, chặn tuyệt đối 0.999 trung bình và 0.995 mỗi clip, kiểm độ ổn định, mẫu kiểm cố định. Lý do: lượt SMOKE dừng với 20 clip, trung bình 0.99974, thấp nhất 0.99854 (1 clip dưới 0.999). Không đổi tham số, luật, kho, cột, tiêu chí.",
   "v3 (2026-11-10), TRƯỚC khi chấm val: sửa sha256 của configs/htstep_train_ids.json (v2 ghi hash của bản CRLF trên Windows; blob git là LF, nội dung không đổi, phát hiện ở ô 4 lượt SMOKE). Không đổi tham số, luật, kho, cột, tiêu chí.",
   "v2 (2026-11-09), quyết định TRƯỚC khi chấm val, vì sha256 adapter thầy khác best: bật cột (S), (U), C1 với text của Omni thầy; thêm kiểm encode_av của thầy, dòng tham chiếu teacher / student"
  ],
@@ -1310,7 +1311,143 @@
    "note": "local CPU, 2026-11-09; OmniCos trên 1080 đoạn có teacher (179 video có omni_av/)"
   },
   "omni_clip_cos_min": 0.999,
-  "teacher_clip_cos_min": 0.999,
-  "teacher_clip_check": "ô 9, một lần nạp Omni thầy: encode_av trên 20 clip GT val, cos với htstep-val-seen-feats/omni_av/ >= 0.999, không đạt thì dừng"
+  "teacher_clip_check": {
+   "where": "ô 9, uemr_htstep/teacher_encode.py: encode_av qua adapter best rồi qua adapter thầy, so với htstep-val-seen-feats/omni_av/; text của thầy encode trong cùng lần nạp thầy, sau khi kiểm đạt",
+   "discrimination": {
+    "every_clip": "cos thầy > cos best",
+    "mean_ratio_min": 10,
+    "formula": "mean(1 - cos best) >= 10 × mean(1 - cos thầy)",
+    "on_fail": "dừng, báo user; user quyết giữa B (chỉ cột (b)) và C (tìm nguyên nhân)"
+   },
+   "absolute": {
+    "mean_min": 0.999,
+    "clip_min": 0.995,
+    "note": "0.995 để một clip lệch giải mã không làm dừng lượt thật"
+   },
+   "list_below": 0.999,
+   "stability": {
+    "clip": [
+     "5ZynScCymcQ",
+     25.311,
+     32.531
+    ],
+    "extra_runs": 2,
+    "log": "cos giữa các lần encode với nhau; lệch cỡ 1e-3 thì là sai số giải mã hoặc số học, không phải sai adapter; ghi Nhật ký"
+   },
+   "sample": {
+    "seed": 0,
+    "n": 20,
+    "pool": "mọi đoạn GT có vector omni_av/ trong kho, sắp theo (video, start, end), trừ clip extra",
+    "method": "numpy default_rng(seed).choice(len(pool), n, replace=False), bốc một lần ở local (numpy 2.2.6) và ghi ra đây; notebook đọc danh sách, không bốc lại",
+    "smoke": "SMOKE chỉ có 5 video: n clip đầu của pool trong 5 video đó, cộng extra",
+    "clips": [
+     [
+      "-XxfuKTGei4",
+      157.628,
+      168.326
+     ],
+     [
+      "0YALhfON2lU",
+      68.504,
+      79.3
+     ],
+     [
+      "2mmqG_mn05s",
+      25.448,
+      30.768
+     ],
+     [
+      "4h3rgfeJW8U",
+      495.938,
+      516.233
+     ],
+     [
+      "6vOHWI9yp-4",
+      80.048,
+      89.516
+     ],
+     [
+      "8Qt-rE5Vgf0",
+      109.462,
+      119.448
+     ],
+     [
+      "DzuZxZkZG0Q",
+      130.55,
+      143.575
+     ],
+     [
+      "DzuZxZkZG0Q",
+      167.117,
+      197.387
+     ],
+     [
+      "UvP-oBZdP-s",
+      23.338,
+      29.24
+     ],
+     [
+      "VIQYQkA3mNU",
+      217.048,
+      263.684
+     ],
+     [
+      "WqFIF0-3kLc",
+      135.365,
+      378.022
+     ],
+     [
+      "Xkn3rgzm9UQ",
+      150.01,
+      156.883
+     ],
+     [
+      "XoVY2FxJWvA",
+      116.559,
+      121.358
+     ],
+     [
+      "Z4782sbYOKw",
+      213.879,
+      217.577
+     ],
+     [
+      "aM8FrTyISrw",
+      665.366,
+      671.895
+     ],
+     [
+      "dhsOmrzaOe8",
+      356.285,
+      361.956
+     ],
+     [
+      "eMc1GRa5FEk",
+      166.91,
+      209.96
+     ],
+     [
+      "gSiphY4JrUI",
+      109.656,
+      112.583
+     ],
+     [
+      "gx5MqoSif6c",
+      409.227,
+      477.484
+     ],
+     [
+      "iGm9G4AyAh4",
+      57.785,
+      72.583
+     ]
+    ],
+    "extra": [
+     "5ZynScCymcQ",
+     25.311,
+     32.531
+    ]
+   }
+  }
  }
 }

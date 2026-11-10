@@ -1,18 +1,21 @@
-"""One load of UniAV's teacher (Omni + the LoRA of omni-adapters/checkpoint): GT clips must match omni_av/, then every query.
+"""Is this UniAV's teacher (Omni + the LoRA of omni-adapters/checkpoint)? Check on GT clips, then encode every query in the same load.
 
-The clips are encoded first, with ``OmniRetriever.encode_av(mp4, timestamps=(start, end))`` as ``scripts/extract_htstep_av.py``
-did; a clip under ``--min-cos`` with its stored vector stops the run before any text is encoded, so the query vectors can only
-come from a model that was shown to be the teacher. Text: ``encode_text``, batch 1 (``scripts/eval_htstep_av.py``).
+The clips go through ``OmniRetriever.encode_av(mp4, timestamps=(start, end))`` as ``scripts/extract_htstep_av.py`` did, once with
+the user's ``best`` adapter and once with the teacher's, and both are compared with the stored teacher vectors (protocol
+``reproduction.teacher_clip_check``). The teacher must be closer than ``best`` on every clip and at least ``--ratio`` times closer
+on average, and clear the absolute bars; otherwise the run stops before any text is encoded, so the query vectors can only come
+from a model that was shown to be the teacher. Text: ``encode_text``, batch 1 (``scripts/eval_htstep_av.py``).
 
 Runs in its own environment (transformers 4.57.3, peft 0.20.0, Omni-fix branch htstep-av-extract on PYTHONPATH).
 
-    python -m uemr_htstep.teacher_encode --base-model WAVE-7B --adapter teacher_full --clips clips.json \
-        --captions caps.jsonl --store DIR/text --report DIR/report.json
+    python -m uemr_htstep.teacher_encode --base-model WAVE-7B --adapter teacher_full --best-adapter best_full --clips clips.json \
+        --repeat-id "video|start|end" --captions caps.jsonl --store DIR/text --report DIR/report.json
 """
 
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import sys
 import time
@@ -24,38 +27,75 @@ from omni_retrieval.encode import ChunkWriter
 from omni_retrieval.manifest import store_keys
 
 
-def check_clips(encode, clips: list[dict], min_cos: float) -> dict:
-    """``encode(clip) -> vector``; cosine of every clip with the row of its stored teacher file."""
-    cos = {}
-    t0 = time.time()
+def stored_cos(encode, clips: list[dict]) -> tuple[dict, dict]:
+    """``encode(clip) -> vector``; ``({id: cosine with the row of its stored teacher file}, {id: vector})``."""
+    cos, vecs = {}, {}
     for c in clips:
         with np.load(c["npz"]) as z:
             ref = z["emb"][c["row"]].astype(np.float32)
         v = np.asarray(encode(c), np.float32).reshape(-1)
-        cos[c["id"]] = float(v @ ref / np.linalg.norm(v) / np.linalg.norm(ref))
-    vals = list(cos.values())
-    return {"n": len(vals), "min": min(vals), "mean": float(np.mean(vals)), "min_required": min_cos, "ok": min(vals) >= min_cos,
-            "sec_per_clip": (time.time() - t0) / max(len(vals), 1), "below": {k: round(v, 5) for k, v in cos.items() if v < min_cos}}
+        cos[c["id"]], vecs[c["id"]] = float(v @ ref / np.linalg.norm(v) / np.linalg.norm(ref)), v
+    return cos, vecs
+
+
+def judge(teacher: dict, best: dict, min_mean: float, min_clip: float, ratio: float, list_below: float) -> dict:
+    """The two conditions of the check. ``discriminates``: the teacher beats ``best`` on every clip and mean(1 - cos best) >=
+    ratio x mean(1 - cos teacher). ``absolute``: bars on the teacher alone. Clips under ``list_below`` are listed, not fatal."""
+    t = np.array([teacher[k] for k in teacher])
+    gap_t, gap_b = float(np.mean(1 - t)), float(np.mean([1 - best[k] for k in teacher]))
+    not_closer = {k: [round(teacher[k], 5), round(best[k], 5)] for k in teacher if teacher[k] <= best[k]}
+    discriminates = not not_closer and gap_b >= ratio * gap_t
+    absolute = float(t.mean()) >= min_mean and float(t.min()) >= min_clip
+    return {"n": len(t), "mean": float(t.mean()), "min": float(t.min()), "best_mean": float(np.mean([best[k] for k in teacher])),
+            "gap_teacher": gap_t, "gap_best": gap_b, "gap_ratio": gap_b / gap_t if gap_t > 0 else None, "ratio_required": ratio,
+            "not_closer": not_closer, "discriminates": discriminates, "min_mean": min_mean, "min_clip": min_clip, "absolute": absolute,
+            "ok": discriminates and absolute, "below": {k: round(v, 5) for k, v in teacher.items() if v < list_below},
+            "cos_teacher": teacher, "cos_best": best}
+
+
+def pairwise_cos(vectors: list) -> list[float]:
+    """Cosine between every pair of repeated encodings of one clip."""
+    unit = [np.asarray(v, np.float32) / np.linalg.norm(v) for v in vectors]
+    return [float(unit[i] @ unit[j]) for i in range(len(unit)) for j in range(i + 1, len(unit))]
 
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    for flag in ("--base-model", "--adapter", "--clips", "--captions", "--store", "--report"):
+    for flag in ("--base-model", "--adapter", "--best-adapter", "--clips", "--repeat-id", "--captions", "--store", "--report"):
         p.add_argument(flag, required=True)
-    p.add_argument("--min-cos", type=float, default=0.999)
+    p.add_argument("--repeats", type=int, default=2)
+    p.add_argument("--min-mean", type=float, required=True)
+    p.add_argument("--min-clip", type=float, required=True)
+    p.add_argument("--ratio", type=float, required=True)
+    p.add_argument("--list-below", type=float, required=True)
     p.add_argument("--device", default="cuda")
     p.add_argument("--dtype", default="bfloat16")
     a = p.parse_args()
+    import torch
     from omniretriever import OmniRetriever
 
-    model = OmniRetriever.from_pretrained(a.base_model, a.adapter, device=a.device, dtype=a.dtype)
+    load = lambda adapter: OmniRetriever.from_pretrained(a.base_model, adapter, device=a.device, dtype=a.dtype)
+    encoder = lambda m: lambda c: m.encode_av(c["video"], timestamps=(c["start"], c["end"])).float().cpu().numpy()
     clips = json.load(open(a.clips, encoding="utf-8"))
-    rep = check_clips(lambda c: model.encode_av(c["video"], timestamps=(c["start"], c["end"])).float().cpu().numpy(), clips, a.min_cos)
+
+    best = load(a.best_adapter)
+    cos_best, _ = stored_cos(encoder(best), clips)
+    del best
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    model = load(a.adapter)        # this load also encodes the text below
+    t0 = time.time()
+    cos_teacher, vecs = stored_cos(encoder(model), clips)
+    rep = judge(cos_teacher, cos_best, a.min_mean, a.min_clip, a.ratio, a.list_below)
+    rep["sec_per_clip"] = (time.time() - t0) / max(len(clips), 1)
+    clip = next(c for c in clips if c["id"] == a.repeat_id)
+    runs = [vecs[a.repeat_id]] + [np.asarray(encoder(model)(clip), np.float32).reshape(-1) for _ in range(a.repeats)]
+    rep["stability"] = {"id": a.repeat_id, "runs": len(runs), "cos_pairs": pairwise_cos(runs)}
     Path(a.report).parent.mkdir(parents=True, exist_ok=True)
     Path(a.report).write_text(json.dumps(rep, indent=1), encoding="utf-8")
-    print(json.dumps(rep), flush=True)
     if not rep["ok"]:
-        sys.exit(f"CHECK teacher encode_av FAIL: min cos {rep['min']:.5f} < {a.min_cos}")
+        sys.exit(f"CHECK teacher encode_av FAIL: discriminates={rep['discriminates']} absolute={rep['absolute']}")
 
     caps = [json.loads(line) for line in open(a.captions, encoding="utf-8") if line.strip()]
     store = Path(a.store)
