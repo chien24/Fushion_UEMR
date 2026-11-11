@@ -1,0 +1,86 @@
+{
+ "protocol_sha16": "a4ca43db9829842a",
+ "seg_hash": "7c0b6e45a75b04c793bb15587c5f54f56a2b7f18ab4e3809cdaef84e1eb64a02",
+ "main_cell": {
+  "model": "best + UniAV article dự đoán",
+  "mode": "multi",
+  "metric": "R@1 text -> video",
+  "column": "(b)"
+ },
+ "student_enabled": true,
+ "criteria": {
+  "T1": {
+   "test": "ci_low(R8 - R0) > 0",
+   "kết quả": {
+    "cặp": "R8 - R0",
+    "A - B": 8.996655518394649,
+    "CI": "[+5.55, +12.53]",
+    "ci_low": 5.550908238923706,
+    "đạt": true
+   },
+   "câu nếu đạt": "Trên HT-Step, UEMR hơn một vector/video"
+  },
+  "T2": {
+   "test": "ci_low(R8 - R3) > 0",
+   "kết quả": {
+    "cặp": "R8 - R3",
+    "A - B": 2.307692307692308,
+    "CI": "[-1.24, +5.53]",
+    "ci_low": -1.2379956620145411,
+    "đạt": false
+   },
+   "câu nếu đạt": "Cắt theo bước hơn cắt đều cùng số đoạn"
+  },
+  "T3": {
+   "test": "ci_low(R6 - R3) > 0",
+   "kết quả": {
+    "cặp": "R6 - R3",
+    "A - B": -0.33444816053511706,
+    "CI": "[-3.69, +3.00]",
+    "ci_low": -3.686227570949577,
+    "đạt": false
+   },
+   "câu nếu đạt": "Riêng ranh giới của UniAV (chưa lấp) đã hơn cắt đều"
+  },
+  "T4": {
+   "test": "ci_low((U) - (b)) > 0 trên R8",
+   "kết quả": {
+    "cặp": "(U) - (b) R8",
+    "A - B": 3.3444816053511706,
+    "CI": "[+1.80, +5.08]",
+    "ci_low": 1.7953048220178962,
+    "đạt": true
+   },
+   "câu nếu đạt": "Vector student bổ sung được cho Omni (không gian Omni thầy)"
+  },
+  "T5": {
+   "test": "ci_low(C1 - R6) > 0",
+   "kết quả": {
+    "cặp": "C1 - R6",
+    "A - B": -2.9096989966555182,
+    "CI": "[-6.38, +0.40]",
+    "ci_low": -6.3817706419418485,
+    "đạt": false
+   },
+   "câu nếu đạt": "Vector student thay được Omni ở đoạn lấp (không gian Omni thầy)"
+  },
+  "T6": {
+   "test": "chỉ báo, không ngưỡng",
+   "kết quả": {
+    "R8 - R2": {
+     "A - B": -0.16722408026755853,
+     "CI": "[-2.82, +2.47]"
+    },
+    "R6gt - R6": {
+     "A - B": 0.6688963210702341,
+     "CI": "[-0.89, +2.32]"
+    },
+    "(S) - (b) R8": {
+     "A - B": -0.43478260869565216,
+     "CI": "[-3.66, +2.73]"
+    }
+   }
+  }
+ },
+ "conclusion": "UEMR hơn một vector/video nhưng lợi thế so với cắt đều không giữ được; xem chất lượng cắt (mục 5)"
+}

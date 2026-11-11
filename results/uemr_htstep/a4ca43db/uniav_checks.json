@@ -1,0 +1,33 @@
+{
+ "videos": 510,
+ "uniav_raw_sha256": "99c0c980f3248acf6dc7a0fd6f80800829ce340bc5bf51cc2582a5ee4f44ba24",
+ "ArtAcc": 60.19607843137255,
+ "OmniCos": 91.06136559336274,
+ "omni_segments": 1080,
+ "map_gt": {
+  "mAP@0.3": 42.85,
+  "mAP@0.5": 29.83,
+  "mAP@0.7": 15.74,
+  "mAP": 29.7,
+  "R@1": 42.13,
+  "stdout": "== all val_seen (600 videos)\n  article grounding: mAP@0.3 37.23  mAP@0.5 25.85  mAP@0.7 13.50  mAP 25.72\n  full    match mAP 28.91  (115 activities, 968 GT segments)\n  partial match mAP 21.45  (119 activities, 2386 GT segments)\n  step grounding R@1 36.57  (2387 (video, step) pairs)\n== videos with predictions (510)\n  article grounding: mAP@0.3 42.85  mAP@0.5 29.83  mAP@0.7 15.74  mAP 29.70\n  full    match mAP 34.18  (114 activities, 851 GT segments)\n  partial match mAP 25.14  (119 activities, 2068 GT segments)\n  step grounding R@1 42.13  (2072 (video, step) pairs)\n"
+ },
+ "map_pred": {
+  "mAP@0.3": 28.43,
+  "mAP@0.5": 19.78,
+  "mAP@0.7": 9.99,
+  "mAP": 19.55,
+  "R@1": 29.15,
+  "stdout": "== all val_seen (600 videos)\n  article grounding: mAP@0.3 25.13  mAP@0.5 17.48  mAP@0.7 8.83  mAP 17.27\n  full    match mAP 20.29  (115 activities, 968 GT segments)\n  partial match mAP 14.46  (119 activities, 2386 GT segments)\n  step grounding R@1 25.30  (2387 (video, step) pairs)\n== videos with predictions (510)\n  article grounding: mAP@0.3 28.43  mAP@0.5 19.78  mAP@0.7 9.99  mAP 19.55\n  full    match mAP 23.78  (114 activities, 851 GT segments)\n  partial match mAP 16.67  (119 activities, 2068 GT segments)\n  step grounding R@1 29.15  (2072 (video, step) pairs)\n"
+ },
+ "vs_hf_csv": {
+  "rows": [
+   101998,
+   101998
+  ],
+  "same_videos": true,
+  "matched_pct": 99.2450832369262,
+  "score_mean_abs": 0.00010647229027541784,
+  "score_max_abs": 0.41445299999999996
+ }
+}

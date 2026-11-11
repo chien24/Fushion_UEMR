@@ -1,0 +1,15 @@
+{
+ "protocol_sha16": "a4ca43db9829842a",
+ "seg_hash": "7c0b6e45a75b04c793bb15587c5f54f56a2b7f18ab4e3809cdaef84e1eb64a02",
+ "files": {
+  "r0": "5614e6bb5ca891ab615d6628002c8df6ecc2e4c0a53e2b0433cb9c9c8d1f59ee",
+  "r2": "c639316e117df6de3a6eacdf8cb7289eebda8cfe9d637822d70dc131e79f32b5",
+  "r3": "6b6d10e1bf645e9bda74ef407bdc7b48672c1ef8a0f49b1a74b147b436c2c02c",
+  "r6": "142991e4e53ebb35e718114ea0bbb9ec92c3ca4886cf4fc6fc3deae162445fc1",
+  "r8": "5cf5d10e328b16474486fea4b1f1bed7d0932c05970af9515cb13571e96df87a",
+  "r6gt": "0a1eb2dfa7b810e80197f854df49aa07240d4e25783e046000bdc52aa967076e",
+  "r7": "a180bde0080e983f3fe13dd228e1eff46afa63337b987fc9f7a263cf12a9bae4"
+ },
+ "commit": "bfd10de omni_retrieval.encode: bỏ giới hạn 500 MB của loader (bản H.264 lossless của video AV1 dài bị bỏ qua; giới hạn không đổi vector)",
+ "created": "2026-11-11 02:59:59"
+}

@@ -1,0 +1,253 @@
+{
+ "runs": [
+  {
+   "started": "2026-11-11 01:49:33",
+   "commit": "9f22fa1 HT-Step UEMR protocol v4: kiểm adapter thầy bằng phép phân biệt thầy / best, chặn tuyệt đối 0.999 / 0.995, độ ổn định, mẫu kiểm cố định (quyết định của user trước khi chấm val)",
+   "protocol_sha16": "a4ca43db9829842a",
+   "flags": {
+    "FUSHION_REF": "9f22fa1da61f527cecd84959512281d0a8eeffd8",
+    "PROTO_SHA16": "a4ca43db9829842a",
+    "SMOKE": false,
+    "OMNI_TAGS": [
+     "best"
+    ],
+    "SEED": 0,
+    "RUN_OMNI": true,
+    "RUN_EVAL": true,
+    "RUN_DRIVE": "/content/drive/MyDrive/omniretriever/htstep_lora/lora_bs32"
+   },
+   "env": {
+    "python": "3.13.16",
+    "torch": "2.14.1+cu130",
+    "numpy": "2.4.6",
+    "gpu": "NVIDIA A100-SXM4-40GB",
+    "gpu_GB": 39.5,
+    "fushion": "9f22fa1 HT-Step UEMR protocol v4: kiểm adapter thầy bằng phép phân biệt thầy / best, chặn tuyệt đối 0.999 / 0.995, độ ổn định, mẫu kiểm cố định (quyết định của user trước khi chấm val)",
+    "hanli": "77fc4fa Metrics of other works: official mAP@0.3/0.5/0.7, full/partial match mAP, step grounding R@1",
+    "omni_fix": "ab772eb notebook train ô 1: sh() đọc byte, giữ CR để thanh tqdm vẽ đè 1 dòng thay vì in mỗi lần nhích 1 dòng",
+    "omni_av": "57a7f1f TarLocator.prefetch: scan the needed tars in parallel before extracting / evaluating",
+    "smoke": false
+   },
+   "sec": {
+    "inventory": 3.1,
+    "videos": 673.3,
+    "uniav_repro": 0.0,
+    "uniav_cache": 1.7,
+    "partitions": 72.9
+   },
+   "info": {
+    "inventory": {
+     "counts": {
+      "val_seen": 600,
+      "with UniAV features": 510,
+      "in val_omni_htstep.jsonl": 510,
+      "in train of a model": 0,
+      "kept": 510
+     }
+    },
+    "videos": {
+     "status": {
+      "tải": 510
+     }
+    },
+    "uniav_repro": {},
+    "uniav_cache": {
+     "sha": "99c0c980f3248acf"
+    },
+    "partitions": {
+     "unique_clips": 41248,
+     "seg_hash": "7c0b6e45a75b04c793bb15587c5f54f56a2b7f18ab4e3809cdaef84e1eb64a02"
+    }
+   }
+  },
+  {
+   "started": "2026-11-11 02:11:35",
+   "commit": "9f22fa1 HT-Step UEMR protocol v4: kiểm adapter thầy bằng phép phân biệt thầy / best, chặn tuyệt đối 0.999 / 0.995, độ ổn định, mẫu kiểm cố định (quyết định của user trước khi chấm val)",
+   "protocol_sha16": "a4ca43db9829842a",
+   "flags": {
+    "FUSHION_REF": "9f22fa1da61f527cecd84959512281d0a8eeffd8",
+    "PROTO_SHA16": "a4ca43db9829842a",
+    "SMOKE": false,
+    "OMNI_TAGS": [
+     "best"
+    ],
+    "SEED": 0,
+    "RUN_OMNI": true,
+    "RUN_EVAL": true
+   },
+   "env": {
+    "python": "3.13.16",
+    "torch": "2.14.1+cu130",
+    "numpy": "2.4.6",
+    "gpu": "NVIDIA A100-SXM4-40GB",
+    "gpu_GB": 39.5,
+    "fushion": "9f22fa1 HT-Step UEMR protocol v4: kiểm adapter thầy bằng phép phân biệt thầy / best, chặn tuyệt đối 0.999 / 0.995, độ ổn định, mẫu kiểm cố định (quyết định của user trước khi chấm val)",
+    "hanli": "77fc4fa Metrics of other works: official mAP@0.3/0.5/0.7, full/partial match mAP, step grounding R@1",
+    "omni_fix": "ab772eb notebook train ô 1: sh() đọc byte, giữ CR để thanh tqdm vẽ đè 1 dòng thay vì in mỗi lần nhích 1 dòng",
+    "omni_av": "57a7f1f TarLocator.prefetch: scan the needed tars in parallel before extracting / evaluating",
+    "smoke": false
+   },
+   "sec": {
+    "inventory": 3.1,
+    "videos": 17.6,
+    "uniav_repro": 0.0,
+    "uniav_cache": 1.8,
+    "partitions": 71.8
+   },
+   "info": {
+    "inventory": {
+     "counts": {
+      "val_seen": 600,
+      "with UniAV features": 510,
+      "in val_omni_htstep.jsonl": 510,
+      "in train of a model": 0,
+      "kept": 510
+     }
+    },
+    "videos": {
+     "status": {
+      "có sẵn": 510
+     }
+    },
+    "uniav_repro": {},
+    "uniav_cache": {
+     "sha": "99c0c980f3248acf"
+    },
+    "partitions": {
+     "unique_clips": 41248,
+     "seg_hash": "7c0b6e45a75b04c793bb15587c5f54f56a2b7f18ab4e3809cdaef84e1eb64a02"
+    }
+   }
+  },
+  {
+   "started": "2026-11-11 02:22:12",
+   "commit": "9f22fa1 HT-Step UEMR protocol v4: kiểm adapter thầy bằng phép phân biệt thầy / best, chặn tuyệt đối 0.999 / 0.995, độ ổn định, mẫu kiểm cố định (quyết định của user trước khi chấm val)",
+   "protocol_sha16": "a4ca43db9829842a",
+   "flags": {
+    "FUSHION_REF": "9f22fa1da61f527cecd84959512281d0a8eeffd8",
+    "PROTO_SHA16": "a4ca43db9829842a",
+    "SMOKE": false,
+    "OMNI_TAGS": [
+     "best"
+    ],
+    "SEED": 0,
+    "RUN_OMNI": true,
+    "RUN_EVAL": true
+   },
+   "env": {
+    "python": "3.13.16",
+    "torch": "2.14.1+cu130",
+    "numpy": "2.4.6",
+    "gpu": "NVIDIA A100-SXM4-40GB",
+    "gpu_GB": 39.5,
+    "fushion": "9f22fa1 HT-Step UEMR protocol v4: kiểm adapter thầy bằng phép phân biệt thầy / best, chặn tuyệt đối 0.999 / 0.995, độ ổn định, mẫu kiểm cố định (quyết định của user trước khi chấm val)",
+    "hanli": "77fc4fa Metrics of other works: official mAP@0.3/0.5/0.7, full/partial match mAP, step grounding R@1",
+    "omni_fix": "ab772eb notebook train ô 1: sh() đọc byte, giữ CR để thanh tqdm vẽ đè 1 dòng thay vì in mỗi lần nhích 1 dòng",
+    "omni_av": "57a7f1f TarLocator.prefetch: scan the needed tars in parallel before extracting / evaluating",
+    "smoke": false
+   },
+   "sec": {
+    "inventory": 35.3,
+    "videos": 351.4,
+    "uniav_repro": 2.1,
+    "uniav_cache": 18.9,
+    "partitions": 75.3
+   },
+   "info": {
+    "inventory": {
+     "counts": {
+      "val_seen": 600,
+      "with UniAV features": 510,
+      "in val_omni_htstep.jsonl": 510,
+      "in train of a model": 0,
+      "kept": 510
+     }
+    },
+    "videos": {
+     "status": {
+      "tải": 510
+     }
+    },
+    "uniav_repro": {},
+    "uniav_cache": {
+     "sha": "99c0c980f3248acf"
+    },
+    "partitions": {
+     "unique_clips": 41248,
+     "seg_hash": "7c0b6e45a75b04c793bb15587c5f54f56a2b7f18ab4e3809cdaef84e1eb64a02"
+    }
+   }
+  },
+  {
+   "started": "2026-11-11 02:58:10",
+   "commit": "bfd10de omni_retrieval.encode: bỏ giới hạn 500 MB của loader (bản H.264 lossless của video AV1 dài bị bỏ qua; giới hạn không đổi vector)",
+   "protocol_sha16": "a4ca43db9829842a",
+   "flags": {
+    "FUSHION_REF": "bfd10de4db30440c2bbe41ebb3662a0402479539",
+    "PROTO_SHA16": "a4ca43db9829842a",
+    "SMOKE": false,
+    "OMNI_TAGS": [
+     "best"
+    ],
+    "SEED": 0,
+    "RUN_OMNI": true,
+    "RUN_EVAL": true
+   },
+   "env": {
+    "python": "3.13.16",
+    "torch": "2.14.1+cu130",
+    "numpy": "2.4.6",
+    "gpu": "NVIDIA A100-SXM4-40GB",
+    "gpu_GB": 39.5,
+    "fushion": "bfd10de omni_retrieval.encode: bỏ giới hạn 500 MB của loader (bản H.264 lossless của video AV1 dài bị bỏ qua; giới hạn không đổi vector)",
+    "hanli": "77fc4fa Metrics of other works: official mAP@0.3/0.5/0.7, full/partial match mAP, step grounding R@1",
+    "omni_fix": "ab772eb notebook train ô 1: sh() đọc byte, giữ CR để thanh tqdm vẽ đè 1 dòng thay vì in mỗi lần nhích 1 dòng",
+    "omni_av": "57a7f1f TarLocator.prefetch: scan the needed tars in parallel before extracting / evaluating",
+    "smoke": false
+   },
+   "sec": {
+    "inventory": 3.6,
+    "videos": 28.4,
+    "uniav_repro": 0.0,
+    "uniav_cache": 2.5,
+    "partitions": 74.9,
+    "omni_check": 250.3,
+    "encode_best": 13322.6,
+    "eval_best": 68.6,
+    "criteria": 0.0
+   },
+   "info": {
+    "inventory": {
+     "counts": {
+      "val_seen": 600,
+      "with UniAV features": 510,
+      "in val_omni_htstep.jsonl": 510,
+      "in train of a model": 0,
+      "kept": 510
+     }
+    },
+    "videos": {
+     "status": {
+      "có sẵn": 510
+     }
+    },
+    "uniav_repro": {},
+    "uniav_cache": {
+     "sha": "99c0c980f3248acf"
+    },
+    "partitions": {
+     "unique_clips": 41248,
+     "seg_hash": "7c0b6e45a75b04c793bb15587c5f54f56a2b7f18ab4e3809cdaef84e1eb64a02"
+    },
+    "omni_check": {},
+    "encode_best": {
+     "failed": 0
+    },
+    "eval_best": {},
+    "criteria": {
+     "conclusion": "UEMR hơn một vector/video nhưng lợi thế so với cắt đều không giữ được; xem chất lượng cắt (mục 5)"
+    }
+   }
+  }
+ ]
+}

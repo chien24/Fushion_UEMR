@@ -1,0 +1,222 @@
+{
+ "lọc video": {
+  "val_seen": 600,
+  "with UniAV features": 510,
+  "in val_omni_htstep.jsonl": 510,
+  "in train of a model": 0,
+  "kept": 510
+ },
+ "train_ids": {
+  "uniav_train": 5826,
+  "omni_train": 6993,
+  "both": 5431,
+  "omni_only": 1562,
+  "uniav_only": 395
+ },
+ "câu hỏi": 2990,
+ "câu Full Match": 877,
+ "text trùng": {
+  "queries": 2990,
+  "distinct texts": 930,
+  "% queries whose text is in >= 2 videos": 83.21070234113712,
+  "mean videos per text": 2.227956989247312,
+  "top": [
+   {
+    "text": "bake a sweet potato pie combine the brown sugar sweet potatoes and spices in a mixing bowl",
+    "videos": 5
+   },
+   {
+    "text": "brine truss and roast a turkey brine the bird",
+    "videos": 5
+   },
+   {
+    "text": "cook brussels sprouts with chestnuts season to taste",
+    "videos": 5
+   },
+   {
+    "text": "cook prime rib prep the meat to your liking",
+    "videos": 5
+   },
+   {
+    "text": "cure bacon rub the cure into the meat",
+    "videos": 5
+   },
+   {
+    "text": "make a cuban sandwich add cheese to both sides",
+    "videos": 5
+   },
+   {
+    "text": "make a cuban sandwich cover one side with dill pickles",
+    "videos": 5
+   },
+   {
+    "text": "make arancini heat a large frying pan with oil you may deep fry them in batches which is the traditional method or pan fry them",
+    "videos": 5
+   },
+   {
+    "text": "make arancini using an ice cream scoop or spoon make balls out of the risotto",
+    "videos": 5
+   },
+   {
+    "text": "make arancini when golden all over transfer to some paper towel to drain any surplus oil",
+    "videos": 5
+   },
+   {
+    "text": "make broccoli cheese soup add the flour to make a roux",
+    "videos": 5
+   },
+   {
+    "text": "make chicken taquitos put the shredded chicken slices in a line at the edges of a tortilla",
+    "videos": 5
+   },
+   {
+    "text": "make chiles rellenos place the stuffed peppers into the pan",
+    "videos": 5
+   },
+   {
+    "text": "make chiles rellenos stuff the chiles",
+    "videos": 5
+   },
+   {
+    "text": "make crepes suzette add the orange juice and mix well",
+    "videos": 5
+   },
+   {
+    "text": "make crepes suzette add the sugar and water",
+    "videos": 5
+   },
+   {
+    "text": "make crepes suzette move the crepes with the wooden spatula to help incorporate the sauce while heating the crepes in the frying pan",
+    "videos": 5
+   },
+   {
+    "text": "make dim sum fold and press the edges",
+    "videos": 5
+   },
+   {
+    "text": "make kimchi jjigae add one cup of kimchi",
+    "videos": 5
+   },
+   {
+    "text": "make mango chutney add the sugar salt and paprika in the pan",
+    "videos": 5
+   }
+  ]
+ },
+ "train_steps": {
+  "train_videos": 17472,
+  "train_steps": 103258,
+  "mean": 5.909913003663004
+ },
+ "thời lượng (s)": {
+  "trung vị": 351.13,
+  "lớn nhất": 1758.957
+ },
+ "uniav_reproduction": {
+  "videos": 510,
+  "ArtAcc": 60.19607843137255,
+  "OmniCos": 91.06136559336274,
+  "omni_segments": 1080,
+  "vs_hf_csv": {
+   "rows": [
+    101998,
+    101998
+   ],
+   "same_videos": true,
+   "matched_pct": 99.2450832369262,
+   "score_mean_abs": 0.00010647229027541784,
+   "score_max_abs": 0.41445299999999996
+  }
+ },
+ "uniav_map": {
+  "map_gt": {
+   "mAP@0.3": 42.85,
+   "mAP@0.5": 29.83,
+   "mAP@0.7": 15.74,
+   "mAP": 29.7,
+   "R@1": 42.13
+  },
+  "map_pred": {
+   "mAP@0.3": 28.43,
+   "mAP@0.5": 19.78,
+   "mAP@0.7": 9.99,
+   "mAP": 19.55,
+   "R@1": 29.15
+  }
+ },
+ "clips": {
+  "unique": 41248,
+  "by_row": [
+   {
+    "dòng": "R0",
+    "đoạn": 510,
+    "vec/video": 1.0
+   },
+   {
+    "dòng": "R2",
+    "đoạn": 16914,
+    "vec/video": 33.16470588235294
+   },
+   {
+    "dòng": "R3",
+    "đoạn": 3001,
+    "vec/video": 5.8843137254901965
+   },
+   {
+    "dòng": "R6",
+    "đoạn": 3001,
+    "vec/video": 5.8843137254901965
+   },
+   {
+    "dòng": "R8",
+    "đoạn": 16920,
+    "vec/video": 33.1764705882353
+   },
+   {
+    "dòng": "R6gt",
+    "đoạn": 2937,
+    "vec/video": 5.758823529411765
+   },
+   {
+    "dòng": "R7",
+    "đoạn": 2990,
+    "vec/video": 5.862745098039215
+   }
+  ],
+  "seg_hash": "7c0b6e45a75b04c793bb15587c5f54f56a2b7f18ab4e3809cdaef84e1eb64a02"
+ },
+ "teacher_vs_best": {
+  "teacher_lora_sha256": "b364ad23243887ce8555740f64f9c5df7b39a017bb8ed5c730409e4eb4df01df",
+  "teacher_adapter_sha256": "a6f7a92f8fd00608fc2c4b4b4a7afe0cf45b63f94e3f2e65110b801794b2c61a",
+  "best_adapter_sha256": "5e9899aa043191a87abdfd92f19adf89282c0b3318ab38c40c41354faa9e208a",
+  "best_lora_sha256": "c38007b0a471704c52faf53a4b27e0258ae21d8f7151a067687dba37ab953be2",
+  "same": false
+ },
+ "omni_encode_check": {
+  "cos_av_min": 0.9995936155319214,
+  "cos_text_min": 0.9998095631599426,
+  "n": 20
+ },
+ "teacher_encode_check": {
+  "n": 21,
+  "min": 0.9985431432723999,
+  "mean": 0.9997395958219256,
+  "best_mean": 0.9779084665434701,
+  "gap_teacher": 0.00026040417807442803,
+  "gap_best": 0.02209153345652989,
+  "gap_ratio": 84.83555686351448,
+  "below": {
+   "5ZynScCymcQ|25.311|32.531": 0.99854
+  },
+  "stability": {
+   "id": "5ZynScCymcQ|25.311|32.531",
+   "runs": 3,
+   "cos_pairs": [
+    1.0,
+    1.0,
+    1.0
+   ]
+  },
+  "sec_per_clip": 0.4561079570225307
+ }
+}
