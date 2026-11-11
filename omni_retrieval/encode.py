@@ -273,6 +273,18 @@ class ChunkWriter:
         self.buf = {}
 
 
+def no_size_cap(check, cap: int = 500 * 1024 * 1024):
+    """``LazySupervisedDataset._check_video_file`` without its 500 MB cap. The cap is a training guard: it only decides which
+    files are skipped, never what a vector is. The lossless H.264 copy of a long AV1 video passes it (HT-Step: 15 of the 20
+    AV1 videos of the val gallery), and the train/eval run never met it because it read pre-cut clips."""
+    def check_video_file(self, video_file):
+        if os.path.isfile(video_file) and os.path.getsize(video_file) > cap:
+            return
+        return check(self, video_file)
+    check_video_file.no_size_cap = True
+    return check_video_file
+
+
 def encode_av(model, processor, records_path: Path, writer: ChunkWriter, device: str,
               dtype: str, num_workers: int, silence: bool = False, no_audio: bool = False) -> dict:
     import torch
@@ -291,6 +303,8 @@ def encode_av(model, processor, records_path: Path, writer: ChunkWriter, device:
     # run_test only changes error handling here: a record that fails to load comes back
     # as None (logged below) instead of being replaced by a random other sample.
     data_args.run_test = True
+    if not getattr(om.LazySupervisedDataset._check_video_file, "no_size_cap", False):
+        om.LazySupervisedDataset._check_video_file = no_size_cap(om.LazySupervisedDataset._check_video_file)
     ds = om.LazySupervisedDataset(tokenizer=processor.tokenizer, data_args=data_args)
     ids = [r["id"] for r in ds.list_data_dict]
     audio_ids = torch.tensor(processor.tokenizer.convert_tokens_to_ids(

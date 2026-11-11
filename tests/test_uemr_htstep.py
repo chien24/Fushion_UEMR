@@ -368,3 +368,23 @@ def test_student_vectors_shape_and_norm(uniav):
     p = uh.predict(model, ds[0], "pred")
     v = uh.student_vectors(model, p, [[0.0, 60.0], [5.0, 15.0], [20.0, 40.0]])
     assert v.shape == (3, 3584) and np.allclose(np.linalg.norm(v, axis=1), 1.0, atol=1e-4)
+
+
+def test_no_size_cap_keeps_the_other_file_checks(tmp_path):
+    from omni_retrieval.encode import no_size_cap
+
+    class Loader:
+        def _check_video_file(self, video_file):
+            if not os.path.isfile(video_file):
+                raise FileNotFoundError(video_file)
+            if os.path.getsize(video_file) > 10:
+                raise ValueError("Video too large")
+
+    big, small = tmp_path / "big.mp4", tmp_path / "small.mp4"
+    big.write_bytes(b"x" * 20)
+    small.write_bytes(b"x" * 5)
+    check = no_size_cap(Loader._check_video_file, cap=10)
+    check(Loader(), str(big))                         # over the cap: no longer skipped
+    check(Loader(), str(small))
+    with pytest.raises(FileNotFoundError):
+        check(Loader(), str(tmp_path / "missing.mp4"))
