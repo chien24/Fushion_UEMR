@@ -78,20 +78,25 @@ def headlines_by_video(captions: list[dict]) -> dict[str, list[tuple[float, floa
     return dict(out)
 
 
-def text_to_video(index, text: dict, captions: list[dict], mode: str, agg: str = "max", sim=None) -> dict:
+def text_to_video(index, text: dict, captions: list[dict], mode: str, agg: str = "max", sim=None, bonus=None,
+                  **agg_kw) -> dict:
     """Ranks and VCMR hits of every query (``captions`` in the order of ``text``) on a ``SegmentIndex``.
 
     ``sim`` (Q, N rows of ``index``): the score of every segment when it is not ``q @ index.emb`` (columns (U), C1 of §6);
-    the video score is still MaxSim.
+    the video score is still MaxSim. ``bonus`` (Q, V of ``index.videos``): added to every video score after the
+    aggregation (S_G of the add-on plan); the moment is still the argmax segment. ``agg_kw``: ``k`` / ``tau`` of
+    ``SegmentIndex.score_matrix``. ``top_row``: the best segment of the video ranked first.
     """
     if [c["caption_id"] for c in captions] != [str(x) for x in text["caption_id"]]:
         raise ValueError("captions and text.npz are not in the same order")
     steps = headlines_by_video(captions)
     heads = [c["headline"] for c in captions]
     if sim is None:
-        scores, best = index.score_matrix(text["emb"], agg=agg)
+        scores, best = index.score_matrix(text["emb"], agg=agg, **agg_kw)
     else:
         scores, best = maxsim(sim, np.searchsorted(index.videos, index.seg_video), index.n_videos)
+    if bonus is not None:
+        scores = scores + bonus
     right = right_answers(text["video_id"], heads, index.videos, [{h for *_, h in steps.get(v, [])}
                                                                     for v in index.videos], mode)
     ranks, col = ranks_and_best(scores, right)
@@ -106,7 +111,7 @@ def text_to_video(index, text: dict, captions: list[dict], mode: str, agg: str =
             same = [(a, b) for a, b, h in steps.get(str(index.videos[j]), []) if h == heads[i]]
             hit[i] = bool(same) and bool((tiou_vec(ts[i], te[i], np.array([a for a, _ in same]),
                                                    np.array([b for _, b in same])) >= 0.5).any())
-    return {"ranks": ranks, "vcmr": (ranks == 1) & hit}
+    return {"ranks": ranks, "vcmr": (ranks == 1) & hit, "top_row": best[q, scores.argmax(1)]}
 
 
 def gt_clips(segments_npz) -> tuple[np.ndarray, np.ndarray]:

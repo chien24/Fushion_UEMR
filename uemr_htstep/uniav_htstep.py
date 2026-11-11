@@ -40,11 +40,12 @@ def load(repo, ckpt, annotations, taxonomy, step_emb, feat_dir, omni_dir, device
 
 
 @torch.inference_mode()
-def predict(model, video: dict, mode: str = "pred") -> dict:
+def predict(model, video: dict, mode: str = "pred", article: int | None = None) -> dict:
     """The dict of ``inference`` for one dataset item, plus ``article_top1`` and ``feat0`` (D, T) after ``article_cond``.
 
     ``mode='pred'``: the article is the model's top-1 (the main mode). ``mode='gt'``: the GT article of the dataset,
-    only for the reproduction checks and the oracle row R6gt.
+    only for the reproduction checks and the oracle row R6gt. ``article``: this article's steps instead (plan bổ sung
+    §5.4, the random-article control); ``mode`` is then ignored.
     """
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}")
@@ -53,7 +54,9 @@ def predict(model, video: dict, mode: str = "pred") -> dict:
 
     def on_article_head(_module, _inputs, logits):
         top1["i"] = int(logits[0].argmax())
-        if mode == "pred":
+        if article is not None:
+            x["cand"] = torch.as_tensor(model.article_steps[int(article)], device=logits.device)
+        elif mode == "pred":
             x["cand"] = torch.as_tensor(model.article_steps[top1["i"]], device=logits.device)
 
     hooks = [model.article_head.register_forward_hook(on_article_head),

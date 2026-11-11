@@ -64,6 +64,8 @@ def main() -> None:
     for flag in ("--base-model", "--adapter", "--best-adapter", "--clips", "--repeat-id", "--captions", "--store", "--report"):
         p.add_argument(flag, required=True)
     p.add_argument("--repeats", type=int, default=2)
+    p.add_argument("--av-clips", default="", help="jsonl {id, video, start, end}: encode_av after the check (plan bổ sung §5.5)")
+    p.add_argument("--av-store", default="")
     p.add_argument("--min-mean", type=float, required=True)
     p.add_argument("--min-clip", type=float, required=True)
     p.add_argument("--ratio", type=float, required=True)
@@ -111,6 +113,23 @@ def main() -> None:
     writer.flush()
     print(f"[teacher text] {len(todo)} captions, {len(seen)} distinct texts, shape {next(iter(seen.values())).shape if seen else None}, "
           f"{(time.time() - t0) / max(len(seen), 1):.3f} s/text", flush=True)
+    if a.av_clips:          # plan bổ sung §5.5: the teacher on the R6 segments, same load, after the check passed
+        av = [json.loads(line) for line in open(a.av_clips, encoding="utf-8") if line.strip()]
+        done = store_keys(Path(a.av_store), "av")
+        writer = ChunkWriter(Path(a.av_store), "av", 200)
+        todo, failed, t0 = [c for c in av if c["id"] not in done], [], time.time()
+        for i, c in enumerate(todo, 1):
+            try:
+                writer.add(c["id"], encoder(model)(c).reshape(-1))
+            except Exception as e:     # noqa: BLE001 - one clip must not lose the others; listed in the report
+                failed.append({"id": c["id"], "error": f"{type(e).__name__}: {e}"})
+            if i % 200 == 0:
+                writer.flush()
+                print(f"[teacher av] {i}/{len(todo)} {(time.time() - t0) / i:.3f} s/clip", flush=True)
+        writer.flush()
+        rep["av_clips"] = {"todo": len(todo), "failed": failed, "sec_per_clip": (time.time() - t0) / max(len(todo), 1)}
+        Path(a.report).write_text(json.dumps(rep, indent=1), encoding="utf-8")
+        print(f"[teacher av] {len(todo)} clips, {len(failed)} failed", flush=True)
 
 
 if __name__ == "__main__":

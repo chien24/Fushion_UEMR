@@ -120,16 +120,32 @@ def cmd_check(a) -> None:
         k: {x: y for x, y in checks[k].items() if x != "stdout"} for k in ("map_gt", "map_pred")}, indent=1))
 
 
+def conditioning(model, item, uh, how: str, rng) -> tuple[dict, int]:
+    """``(predict output, article used)``: the model's top-1 (``pred``, the main mode), the GT article (``gt``, oracle), or a
+    random article other than the top-1 (``rand``, plan bổ sung §5.4; one draw per video in sorted video order)."""
+    p = uh.predict(model, item, "pred")
+    if how == "pred":
+        return p, p["article_top1"]
+    if how == "gt":
+        return uh.predict(model, item, "gt"), int(item["article"])
+    r = int(rng.integers(len(model.article_steps) - 1))
+    r += r >= p["article_top1"]
+    return uh.predict(model, item, article=r), r
+
+
 def cmd_student(a, model, ds, uh) -> None:
     os.makedirs(a.out, exist_ok=True)
     parts = {n: json.load(open(os.path.join(a.segments, f"{n}.json"), encoding="utf-8")) for n in a.names}
     row_of = {x["id"]: i for i, x in enumerate(ds.data_list)}
     acc = {n: [] for n in a.names}
     ids = {n: [] for n in a.names}
+    used = []
+    rng = np.random.default_rng(a.rand_seed)
     t0 = time.time()
     videos = sorted(next(iter(parts.values())))
     for i, v in enumerate(videos, 1):
-        p = uh.predict(model, ds[row_of[v]], "pred")          # the main mode: the student of plan §6 for every row
+        p, art = conditioning(model, ds[row_of[v]], uh, a.article, rng)
+        used.append(art)
         for n in a.names:
             segs = parts[n][v]
             acc[n].append(uh.student_vectors(model, p, segs))
@@ -137,10 +153,32 @@ def cmd_student(a, model, ds, uh) -> None:
         if i % 50 == 0:
             print(f"[student] {i}/{len(videos)} {(time.time() - t0) / i:.2f} s/video", flush=True)
     for n in a.names:
-        path = os.path.join(a.out, f"student_{n}.npz")
+        path = os.path.join(a.out, f"student_{n}.npz" if a.article == "pred" else f"student_{n}_{a.article}.npz")
         np.savez(path, emb=np.concatenate(acc[n]).astype(np.float16), video_id=np.array([x[0] for x in ids[n]]),
-                 ts=np.array([x[1] for x in ids[n]], np.float32), te=np.array([x[2] for x in ids[n]], np.float32))
+                 ts=np.array([x[1] for x in ids[n]], np.float32), te=np.array([x[2] for x in ids[n]], np.float32),
+                 article_video=np.array(videos), article=np.array(used))
         print(f"{path}: {len(ids[n])} segments, sha256 {sha256(path)}")
+
+
+def cmd_feats(a, model, ds, uh) -> None:
+    """``feats.npz``: the level-0 features the span head reads (``feat0`` after ``article_cond``, main mode), (V, T, D) fp16, with
+    the centre time of every step (``t_sec``) and the top-1 article: Z of Context Fusion and the input of R5 (plan bổ sung §3, §5.2)."""
+    os.makedirs(a.out, exist_ok=True)
+    row_of = {x["id"]: i for i, x in enumerate(ds.data_list)}
+    videos = [v.strip() for v in open(a.videos, encoding="utf-8") if v.strip()]
+    feats, tsec, top1 = [], [], []
+    t0 = time.time()
+    for i, v in enumerate(videos, 1):
+        p = uh.predict(model, ds[row_of[v]], "pred")
+        f = p["feat0"].float().cpu().numpy().T                       # (T, D)
+        feats.append(f.astype(np.float16))
+        tsec.append(uh.steps_to_sec(np.arange(len(f)), p["feat_stride"], p["fps"]).astype(np.float32))
+        top1.append(p["article_top1"])
+        if i % 50 == 0:
+            print(f"[feats] {i}/{len(videos)} {(time.time() - t0) / i:.2f} s/video", flush=True)
+    path = os.path.join(a.out, "feats.npz")
+    np.savez(path, video_id=np.array(videos), feat=np.stack(feats), t_sec=np.stack(tsec), article_top1=np.array(top1))
+    print(f"{path}: {np.stack(feats).shape}, sha256 {sha256(path)}")
 
 
 def main() -> None:
@@ -158,6 +196,9 @@ def main() -> None:
     st = sub.add_parser("student", parents=[common, model_args])
     st.add_argument("--segments", required=True)
     st.add_argument("--names", nargs="+", required=True)
+    st.add_argument("--article", choices=("pred", "gt", "rand"), default="pred")
+    st.add_argument("--rand-seed", type=int, default=0)
+    sub.add_parser("feats", parents=[common, model_args])
     ch = sub.add_parser("check", parents=[common])
     ch.add_argument("--hf-csv", default="")
     a = p.parse_args()
@@ -166,7 +207,7 @@ def main() -> None:
         return
     from uemr_htstep import uniav_htstep as uh
     model, ds = uh.load(a.uniav_repo, a.ckpt, a.annotations, a.taxonomy, a.step_emb, a.feat_dir, a.omni_dir, a.device)
-    {"proposals": cmd_proposals, "student": cmd_student}[a.cmd](a, model, ds, uh)
+    {"proposals": cmd_proposals, "student": cmd_student, "feats": cmd_feats}[a.cmd](a, model, ds, uh)
 
 
 if __name__ == "__main__":
