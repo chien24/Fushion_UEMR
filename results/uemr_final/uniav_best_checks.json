@@ -1,0 +1,49 @@
+{
+ "old": {
+  "ckpt_sha256": "a7c46353bf6635ad33d9cfecb04eb8ca275dc8fb4eab40d62457aef5c70c2616",
+  "uniav_raw_sha256": "99c0c980f3248acf6dc7a0fd6f80800829ce340bc5bf51cc2582a5ee4f44ba24",
+  "mAP article GT": 29.7,
+  "mAP article đoán": 19.55,
+  "ArtAcc": 60.19607843137255,
+  "theta": 0.402,
+  "mean_k": 5.8843137254901965,
+  "recall tIoU 0.3": 42.173913043478265,
+  "recall tIoU 0.5": 31.73913043478261,
+  "recall tIoU 0.7": 20.501672240802677
+ },
+ "new": {
+  "ckpt_sha256": "9447de877aad65407605a338e1b946f22c140f18690aae93cf35cec5468945f0",
+  "uniav_raw_sha256": "5db3e8cb69808c2b08af5c95ea3a416124bb00b9273d35bc966ef6c9af5cae87",
+  "mAP article GT": 30.31,
+  "mAP article đoán": 20.14,
+  "ArtAcc": 59.6078431372549,
+  "theta": 0.402,
+  "mean_k": 5.8882352941176475,
+  "recall tIoU 0.3": 43.57859531772576,
+  "recall tIoU 0.5": 33.04347826086956,
+  "recall tIoU 0.7": 21.57190635451505,
+  "omni": {
+   "train_teacher": "D:/Học/KL/output/uemr_chot/omni_av_best/train",
+   "cand_check": {
+    "videos": 20,
+    "unchanged": 20
+   },
+   "pred": {
+    "segments": 2990,
+    "videos": 510,
+    "OmniCos": 87.8750228881836,
+    "OmniCosC": 71.70698547363281,
+    "OmniR@1": 50.5685618729097
+   },
+   "gt": {
+    "segments": 2990,
+    "videos": 510,
+    "OmniCos": 88.077392578125,
+    "OmniCosC": 72.20092010498047,
+    "OmniR@1": 52.04013377926422
+   }
+  }
+ },
+ "segment_source_rule": "đoạn R6 lấy từ UniAV có mAP article đoán cao hơn trên dev; hoà lấy mới; h_i luôn từ UniAV mới",
+ "segment_source": "mới"
+}

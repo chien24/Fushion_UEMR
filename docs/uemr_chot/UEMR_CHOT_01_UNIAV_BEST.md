@@ -223,3 +223,26 @@ torch 2.14.1+cu130.
 `cand` GT không đổi chế độ chính) và `uemr_htstep.uniav_best_checks` (bảng §6, recall theo luật θ, luật chọn nguồn đoạn). Chạy thử trên
 UniAV cũ: tái lập đúng θ 0,402, recall tIoU 0,5 = 31,74; `omni` chạy được, chế độ chính không đổi khi thay `cand` (3 / 3 video).
 
+### 2026-11-12, kết quả §6 (local CPU, Fushion `2a751a9`, HanLi `77fc4fa`)
+
+Checkpoint mới sha256 `9447de87…` và bộ thầy (5.941 / 5.941 file đúng sha256) tải từ HF. `run_uniav proposals / check / omni` trên 510
+video kho, rồi `uemr_htstep.uniav_best_checks` → `results/uemr_final/uniav_best_checks.json`. Đầu ra local:
+`D:/Học/KL/output/uemr_chot/uniav_best/` (`uniav_raw.jsonl` sha256 `5db3e8cb69808c2b08af5c95ea3a416124bb00b9273d35bc966ef6c9af5cae87`,
+`checks.json`, `predictions_{gt,pred}.csv`, `omni_checks.json`).
+
+| Chỉ số (510 video) | UniAV cũ (đã đo) | UniAV mới |
+|---|---|---|
+| mAP@[0.3:0.7], article GT | 29.70 | 30.31 |
+| mAP@[0.3:0.7], article đoán | 19.55 | **20.14** |
+| ArtAcc | 60.20 | 59.61 |
+| Recall bước GT, tIoU 0.5, article đoán, θ theo luật | 31.74 (θ 0,402) | 33.04 (θ 0,402, K trung bình 5,888) |
+| OmniCos / OmniCosC / OmniR@1, đoạn GT, article GT | 91.06 / 75.05 / 59.72 (thầy cũ, 1.080 đoạn) | 88.08 / 72.20 / 52.04 (thầy `best`, 2.990 đoạn) |
+| OmniCos / OmniCosC / OmniR@1, đoạn GT, **article đoán** | chưa đo | 87.88 / 71.71 / 50.57 |
+
+- Hàng article GT của UniAV mới khớp số `train.py` ghi trong checkpoint (OmniCos 88.08, OmniCosC 72.20, OmniR@1 52.04, ArtAcc 59.61);
+  mAP 30.31 so với 30.29 (CPU / GPU). Trung bình thầy train cho OmniCosC tính trên mọi vector của `omni_av_best/train` cho đúng 72.20.
+- Kiểm adapter trên checkpoint mới: đổi `cand` GT (sang article khác) không đổi đoạn, điểm, nhãn và vector span head ở chế độ chính:
+  20 / 20 video.
+- **Luật chọn nguồn đoạn:** mAP article đoán mới 20.14 > cũ 19.55 → **đoạn R6 lấy từ UniAV mới**. `h_i` luôn từ UniAV mới.
+- Hàng Omni cũ / mới không so trực tiếp (thầy khác, tập đoạn khác).
+

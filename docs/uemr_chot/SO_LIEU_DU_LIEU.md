@@ -50,6 +50,10 @@ Kiểm đường encode: 20 clip GT val so với `val_embeds_best.npz` cos trung
 Train trên 5.826 video (5.431 có thầy), 11 epoch, chọn epoch 9 theo mAP val_seen (article GT): mAP 30.29, ArtAcc 59.61, OmniCos 88.08,
 OmniCosC 72.20, OmniR@1 52.04. Checkpoint sha256 `9447de87…`, `GraceFeel/uniav-htstep-best`. Nguồn: log A3, Nhật ký file 01.
 
+Kiểm trên 510 video kho (file 01 §6, `results/uemr_final/uniav_best_checks.json`): mAP article GT 30.31 (cũ 29.70), mAP article đoán
+20.14 (cũ 19.55), recall bước GT tIoU 0.5 theo θ 33.04 (cũ 31.74), OmniCos / OmniCosC / OmniR@1 article đoán 87.88 / 71.71 / 50.57.
+Nguồn đoạn R6 = UniAV mới.
+
 ## 4. YouCook2 (benchmark, zero-shot)
 
 | Bước lọc | Video | Nguồn |
@@ -62,5 +66,4 @@ OmniCosC 72.20, OmniR@1 52.04. Checkpoint sha256 `9447de87…`, `GraceFeel/uniav
 
 ## 5. Chưa có (điền khi có log)
 
-- UniAV mới, phần còn thiếu: mAP article đoán, recall theo θ, OmniCos chế độ article đoán (file 01 §6).
 - YouCook2: số video sau lọc tiếng / đọc được, số câu thật, đặc trưng, vector 6a (B2).
