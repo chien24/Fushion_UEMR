@@ -396,3 +396,12 @@ def test_train_teacher_mean(tmp_path):
     np.savez(tmp_path / "a.npz", emb=np.array([[3.0, 0.0], [0.0, 2.0]], np.float16))
     np.savez(tmp_path / "b.npz", emb=np.array([[0.0, -5.0]], np.float16))
     assert np.allclose(train_teacher_mean(tmp_path), [1 / 3, 0.0])
+
+
+def test_final_dev_pick_breaks_ties_toward_5_10():
+    from uemr_htstep.final_dev import pick
+
+    r = lambda lm, lf, v: {"l_min": lm, "l_fill": lf, "R@1 multi": v}
+    assert pick([r(3, 8, 50.0), r(5, 15, 51.0), r(5, 10, 50.5)]) == r(5, 15, 51.0)          # highest wins
+    assert pick([r(3, 8, 51.0), r(5, 10, 51.0), r(5, 15, 51.0)]) == r(5, 10, 51.0)          # tie: (5, 10)
+    assert pick([r(3, 8, 51.0), r(3, 10, 51.0), r(5, 15, 40.0)]) == r(3, 10, 51.0)          # tie without (5, 10): closest
