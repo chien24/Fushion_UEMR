@@ -164,3 +164,33 @@ Còn trống, điền sau khi có log Colab: kết quả CHECK ô 6, số đoạ
 3. **`OMNI_QWENVL_DIR`: đồng ý.** Ô 6 giữ CHECK cos ≥ 0.999 (từng clip, nên cả trung bình) giữa clip cắt sẵn và `val_embeds_best.npz`;
    FAIL thì dừng trước khi encode cả tập.
 4. `docs/uemr_chot/` được `git add -f` và commit (5 file plan + `HUONG_DAN_CHAY.md`).
+
+### 2026-11-12, kết quả A1 (SMOKE) và A2 (lượt thật), notebook `uemr_chot_01_teacher_best.ipynb`
+
+Log: `notebooks/uemr/log/uemr_chot_01_teacher_best_A{1,2}.pdf`. Fushion `cdb2fac`, Omni-fix `ab772eb`, HanLi `77fc4fa`, A100-SXM4-40GB.
+A1 in "SMOKE xong: mọi CHECK OK". A2: mọi CHECK OK, không FAIL.
+
+- Ô 3: số đoạn đúng bảng §2 (36.026 / 33.326 clip / 379 mp4 / 2.321 không có mp4); val 2.990 đoạn trong cache dev 1.
+- Ô 5: 33.336 clip, sha256 trùng `precut_index`.
+- Ô 6 (CHECK §3):
+  - clip cắt sẵn so với `val_embeds_best.npz`, 20 clip GT val: cos mean **0,99991**, min **0,99986** (≥ 0.999, OK);
+  - cùng 20 clip so với cache dev 1 (đường mp4, cửa sổ làm tròn 0,01 s): mean 0,99873, min 0,99299 (chỉ báo);
+  - 20 clip train encode hai lần: cos min 1,000000 (OK);
+  - 10 đoạn mp4 + `timestamps` so với clip cắt sẵn: mean 0,99986, min 0,99978 (chỉ báo).
+- Ô 7: 22.596 đoạn còn lại sau lượt bị ngắt trước đó (store resume), 22.425 encode được, **171 lỗi, đều nguồn mp4** (decord
+  "Cannot create buffer source" ở video `empty_video_track`, "past the end" ở video mp4 ngắn hơn annotation, đúng các video precut đã
+  loại); 0,236 s/clip. Thời gian encode cộng dồn 8.062 s (2,2 giờ).
+- Ô 8: train 5.431 file, 33.445 đoạn có vector, **2.581 thiếu = 7,16 %** (2.321 không có mp4, 89 mp4 không tải / chuyển được, 171 encode
+  lỗi), CHECK ≤ 8 % OK. Val 510 file, 2.990 đoạn, 0 thiếu.
+- Ô 9: đọc lại bằng `htstep.py`: train 32 video / 194 đoạn, val 32 video / 185 đoạn, mọi đoạn có thầy, norm 1 ± 1e-7, sai khác 0. OK.
+- Ô 10: `GraceFeel/htstep-omni-av-best` (private) đã upload. `config.json` sha256
+  `f9abbce3876926d96d531de27e5469078d4f728c49ff5b0de2378df9335512b3`; tar trên Drive
+  `uemr_chot_run/teacher_best/htstep-omni-av-best.tar` sha256 `ec697aa00187dcf5129e7e915334574a688b8da12bb420c359aa69df612d6b3a`.
+
+Ghi chú: vector thầy val (cache dev 1, mp4) và train (clip cắt sẵn) đi hai đường đọc khác nhau, lệch trung bình 1 − 0,99873 trên 20 clip.
+Chỉ ảnh hưởng tới số OmniCos / chọn checkpoint trên val, không ảnh hưởng tới loss train.
+
+§5: notebook `notebooks/uemr/uemr_chot_01_train_uniav.ipynb` (A100). Bộ thầy mới đặt ở `datasets/omni_av_feats` (đường mặc định), nên
+lệnh là `python train.py --output htstep_best` với `config.py` mặc định, không `--set`; `num_workers` để mặc định (2) như lượt cũ trên
+RTX 3060 (`colab_train.sh` cũ dùng 8, thứ tự crop ngẫu nhiên phụ thuộc số worker).
+

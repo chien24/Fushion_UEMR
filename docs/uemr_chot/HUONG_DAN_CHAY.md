@@ -22,7 +22,7 @@ Nhánh A và nhánh B không phụ thuộc nhau, mở hai phiên Colab chạy so
 |---|---|---|---|---|---|---|
 | A1 | A | Colab A100 | `notebooks/uemr/uemr_chot_01_teacher_best.ipynb` | `SMOKE = True` | ~25 phút | mọi CHECK OK trên 40 video train |
 | A2 | A | Colab A100 | cùng notebook | `SMOKE = False` | ~3,7 giờ (encode ~3,0 giờ) | bộ thầy `GraceFeel/htstep-omni-av-best` + tar trên Drive |
-| A3 | A | máy / Colab của bạn | HanLi `77fc4fa`, `train.py` | xem bên dưới | lượt cũ ~46 phút (RTX 3060) | `model_best.pth.tar` mới |
+| A3 | A | Colab A100 | `notebooks/uemr/uemr_chot_01_train_uniav.ipynb` | `SMOKE = True`, rồi `False` | tải ~10 phút + train (lượt cũ ~46 phút trên RTX 3060) | `model_best.pth.tar` mới |
 | B1 | B | Colab A100 | `notebooks/uemr/uemr_final_benchmark.ipynb` | `SMOKE = True` | ~30–40 phút | CHECK tái lập đặc trưng, 5 video YouCook2 |
 | B2 | B | Colab A100 | cùng notebook | `SMOKE = False` | ô 6a ~0,5 giờ; trích đặc trưng chưa đo | kho yc2, câu hỏi, đặc trưng, vector R0 / R7 / text |
 
@@ -42,16 +42,12 @@ in "SMOKE xong: mọi CHECK OK", đổi ô 0 thành `SMOKE = False` rồi Run al
 trong store trên Drive và được bỏ qua. Ô 6 là phép kiểm quyết định (clip cắt sẵn so với `val_embeds_best.npz`, cos ≥ 0.999); ô này FAIL
 thì không encode gì.
 
-**A3 (train UniAV, bạn chạy).** Code HanLi `77fc4fa`, không sửa. Chuẩn bị dữ liệu như lượt cũ, riêng vector thầy lấy từ bộ mới:
-
-```bash
-python tools/fetch_htstep.py --what k400          # đặc trưng như cũ; KHÔNG tải thầy cũ
-hf download GraceFeel/htstep-omni-av-best --repo-type dataset --local-dir datasets/omni_av_best
-python train.py --output htstep_best --set "dataset.omni_emb_folder='./datasets/omni_av_best'"
-```
-
-Giữ lại: `model_best.pth.tar` và sha256, log train, commit HanLi. Không thử cấu hình khác. Loss NaN hoặc mAP val (article GT) < 20 thì
-dừng, báo (file 01 §5).
+**A3 (train UniAV).** Notebook `notebooks/uemr/uemr_chot_01_train_uniav.ipynb`, A100. Không cần `FUSHION_REF`: notebook chỉ clone HanLi
+`77fc4fa` (không sửa) và tải bộ thầy `GraceFeel/htstep-omni-av-best` vào `datasets/omni_av_feats`, đúng đường mặc định của `config.py`, nên
+lệnh train là `python train.py --output htstep_best`, không `--set` nào. Run all với `SMOKE = True` (1 epoch, ~15 phút gồm tải đặc trưng),
+rồi `SMOKE = False`. Checkpoint, `train.log`, `run_record.json`, `summary.json` ghi thẳng lên Drive
+`uemr_chot_run/uniav_best/htstep_best/` và upload `GraceFeel/uniav-htstep-best` (private). `train.py` không resume được: mất runtime thì Run
+all lại. Loss NaN hoặc mAP val (article GT) < 20 thì ô 5 dừng (file 01 §5).
 
 **B1, B2 (benchmark YouCook2, phần không cần UniAV).** Run all với `SMOKE = True`, rồi `SMOKE = False`. Ô 5 (trích đặc trưng) in tốc độ và
 thời gian còn lại sau 5 video đầu; nếu quá lâu cho một phiên thì đặt `RUN_FEATS = False` để chạy ô 6a trước, rồi chạy lại với
@@ -65,5 +61,5 @@ thời gian còn lại sau 5 video đầu; nếu quá lâu cho một phiên thì
 ## Gửi lại cho agent
 
 - A1 / A2: output của ô 3, 6, 7, 8, 9, 10 (hoặc file notebook đã lưu output).
-- A3: sha256 checkpoint, log train, lệnh đã chạy.
+- A3: output của ô 2, 3, 5 và `summary.json`.
 - B1 / B2: output của ô 3, 4, 5, 6a, 7.
