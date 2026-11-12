@@ -31,7 +31,7 @@ Sau đó (chưa viết, agent làm khi có đầu ra của các bước trên):
 | Bước | Cần gì trước | Việc |
 |---|---|---|
 | A4 | A3 | file 01 §6: kiểm UniAV mới (local CPU) |
-| C | A4 | file 02: notebook `uemr_final_dev.ipynb`, dev HT-Step, khoá `configs/uemr_final.json` |
+| C | A4 (xong) | file 02: notebook `notebooks/uemr/uemr_final_dev.ipynb` (A100, `SMOKE = True` rồi `False`, ~2,4–3,2 giờ): encode clip mới; agent chấm ở local và khoá `configs/uemr_final.json` |
 | D | C và B2 | file 03 §4–9: UniAV + R2 / R3 / R6 / R8 trên YouCook2, khoá protocol, chấm một lần |
 | E | D | file 04: báo cáo |
 

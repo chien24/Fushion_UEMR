@@ -108,3 +108,51 @@ liên quan).
 quyết định có `git add -f` hay không. (Cùng ngày, user quyết định: `git add -f docs/uemr_chot/`, đã commit.)
 
 Chưa làm (cần UniAV mới của file 01): kiểm hash checkpoint mới, CHECK tái lập R8 (b) 57.99, và §2 trở đi.
+
+### 2026-11-12 / 13 (agent, local CPU): §1 phần còn lại, §2 bắt đầu
+
+**§1 kiểm hash:** checkpoint UniAV mới `9447de877aad65407605a338e1b946f22c140f18690aae93cf35cec5468945f0` (= log A3), adapter `best`
+`5e9899aa…` (trong `config.json` của bộ thầy và meta cache dev 1), cache `a4ca43db`: `segments.npz` `16636ad17b6990b3…`, `text.npz`
+`4c8a1c8f88b02b83…` (= `meta.json`).
+
+**§1 CHECK tái lập: OK.** Tính lại R8 (b) của lượt dev 1 từ cache (`uemr_htstep.score.Main` + `run`): R@1 multi **57.99**, strict 21.81;
+mảng hạng và VCMR của cả hai chế độ trùng hệt `results/uemr_htstep/a4ca43db/ranks_best_b_R8.json`.
+
+**§2 / §3 code:** `uemr_htstep/final_dev.py` (`rows`: θ theo luật, R0, R3, R6, R7 và R8 cho lưới 2 × 3; `select`: chọn `L_min`, `L_fill`
+bằng (S), L của R2, ghi `tried.jsonl`). Tự kiểm: chạy `rows` trên UniAV **cũ** cho R0, R3, R6, R7 và R8 (5, 10) trùng hệt bộ đoạn của lượt
+dev 1. Test luật hoà: 43 test pass.
+
+**Các dòng với UniAV mới** (`D:/Học/KL/output/uemr_chot/dev/segments/`, `rows.json`): θ = **0,402** (K trung bình 5,888, đích 5,910).
+Số clip: R0 510, R3 3.003, R6 3.003, R7 2.990; R8 (L_min, L_fill) = (3, 8) 20.592, (3, 10) 17.167, (3, 15) 12.703, (5, 8) 20.364,
+(5, 10) 16.939, (5, 15) 12.475.
+
+**§3 chọn `L_min`, `L_fill` bằng (S)** (`final_dev select`; (S) = text Omni `best` của cache dev 1 · `h_i` của UniAV mới; ghi
+`results/uemr_final/dev/tried.jsonl`):
+
+| (L_min, L_fill) | clip R8 | R@1 multi (S) | R@1 strict (S) |
+|---|---|---|---|
+| (3, 8) | 20.592 | 58.09 | 21.74 |
+| (3, 10) | 17.167 | 58.23 | 21.61 |
+| (3, 15) | 12.703 | 57.56 | 21.34 |
+| (5, 8) | 20.364 | 58.16 | 21.94 |
+| **(5, 10)** | **16.939** | **58.56** | 21.64 |
+| (5, 15) | 12.475 | 57.89 | 21.37 |
+
+Chọn **(5, 10)** (cao nhất, không hoà). L của R2 = **11,89 s** (16.939 clip = R8). Bộ đoạn: `results/uemr_final/dev/segments/`
+(`selected.json`, `rows.json` ghi sha256; hash git blob khớp). Commit `143e708`.
+
+**`h_i`** (`run_uniav student`, checkpoint mới, chế độ article đoán, 0,9–1,0 s / video CPU) cho R0, R3, R6, R7, 6 biến thể R8, R2, R8 đã
+chọn, và R8 với article ngẫu nhiên ≠ article đoán (seed 0, C3); đầu ra local `D:/Học/KL/output/uemr_chot/dev/student/`.
+
+**§4 số clip mới cần encode** (khoá `video__ts_te` so với cache dev 1): 36.881 clip khác nhau của R2, R3, R6, R8, đã có 762, **mới 36.119**
+(R2 16.939 / 16.939 vì L đổi 11,91 → 11,89 s; R3 2.276 / 3.003; R6 3.001 / 3.003; R8 16.904 / 16.939). Ước lượng 2,4 giờ (0,236 s/clip của A2)
+đến 3,2 giờ (0,32 s/clip). R0, R7 đã có trong cache.
+
+**§5 notebook `notebooks/uemr/uemr_final_dev.ipynb`** (commit `1cb2031`, `FUSHION_REF = 143e708`): chỉ encode clip mới, đường cột (b) của
+lượt dev 1 (mp4 + `timestamps`, loader vendored), store trên Drive `uemr_chot_run/dev/best/clips`, upload `GraceFeel/encode_omni`
+`uemr_final/dev/best/clips/`, CHECK lỗi ≤ 2 %. **Khác plan (ghi để user biết):** §6–8 (chấm, chọn β\*, khoá `configs/uemr_final.json`)
+chạy ở local bằng `final_dev score` (numpy, không GPU) thay vì trong notebook, để không phải đưa vector `h_i` (~0,5 GB) lên Colab.
+
+**Tự kiểm `final_dev score`** trên dữ liệu lượt dev 1 (đoạn cũ, cache cũ): cột (b) của R0, R2, R3, R6, R7, R8 × strict / multi khớp
+`metrics_best.json` (12 / 12 hàng, sai khác 0); CHECK β = 0 = (b) OK.
+
