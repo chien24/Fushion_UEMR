@@ -1,8 +1,8 @@
-"""Local, before the add-on protocol is locked (plan bổ sung §3, §4, §5.2, §7): the new segment rows, their hashes, the article
+"""NOT RUN (docs/uemr_chot/UEMR_CHOT_00 §5). Local, before the add-on protocol is locked (plan bổ sung §3, §4, §5.2, §7): the new segment rows, their hashes, the article
 folds of Context Fusion, and the new clip count. No label of a query is read except where the plan says so (R3@K_GT, R7n
 and the folds use the GT steps / articles by definition).
 
-    python -m uemr_htstep.prepare_bo_sung --uniav-raw <uniav>/uniav_raw.jsonl --segments <main segments dir> \
+    python -m uemr_htstep._unused.prepare_bo_sung --uniav-raw <uniav>/uniav_raw.jsonl --segments <main segments dir> \
         --main-source results/uemr_htstep/a4ca43db/segments_SOURCE.json --feats <bo_sung>/uniav/feats.npz \
         --val-manifest val_omni_htstep.jsonl --out <bo_sung>/segments
 """
@@ -20,8 +20,8 @@ from omni_retrieval.manifest import seg_key
 from omni_retrieval.partitions_uemr import sha256
 
 from . import bo_sung as bs
-from . import data as hd
-from .partitions import FILES
+from .. import data as hd
+from ..partitions import FILES
 
 D_MIN_R4 = 2.0          # plan bổ sung §3
 D_MIN_NOISE = 0.1       # only keeps a noisy segment from collapsing; the plan sets no floor for R7n

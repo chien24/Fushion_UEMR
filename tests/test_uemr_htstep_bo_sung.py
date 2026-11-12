@@ -5,6 +5,7 @@ import pytest
 
 from omni_retrieval.search import SegmentIndex
 from uemr_htstep import bo_sung as bs
+from uemr_htstep._unused import bo_sung as un     # rows / columns the final plan does not run (UEMR_CHOT_00 §5); still tested
 from uemr_htstep import metrics as hm
 from uemr_htstep import score as sc
 
@@ -14,21 +15,21 @@ GT = {"a": [[5.0, 9.0], [20.0, 31.5], [60.0, 61.2]], "b": [[1.0, 4.0], [10.0, 30
 
 def test_r4_k_dmin_and_tiling():
     k = {"a": 7, "b": 4, "c": 3}
-    for seed in bs.R4_SEEDS:
-        part = bs.r4(k, DUR, seed, 2.0)
+    for seed in un.R4_SEEDS:
+        part = un.r4(k, DUR, seed, 2.0)
         for v, segs in part.items():
             assert len(segs) == k[v]
             assert segs[0][0] == 0.0 and abs(segs[-1][1] - DUR[v]) < 1e-9
             assert all(abs(segs[i][1] - segs[i + 1][0]) < 0.011 for i in range(len(segs) - 1))
             assert min(te - ts for ts, te in segs) >= 2.0 - 0.011
-    assert bs.r4(k, DUR, 0, 2.0) != bs.r4(k, DUR, 1, 2.0)
+    assert un.r4(k, DUR, 0, 2.0) != un.r4(k, DUR, 1, 2.0)
 
 
 def test_r5_k_and_clips_inside():
     rng = np.random.default_rng(0)
     feats = {v: (rng.standard_normal((256, 16)).astype(np.float32), np.linspace(0, DUR[v], 256)) for v in DUR}
     k = {"a": 5, "b": 3, "c": 2}
-    part, info = bs.r5(feats, k, DUR, 0, 1.0)
+    part, info = un.r5(feats, k, DUR, 0, 1.0)
     for v, segs in part.items():
         assert len(segs) == k[v]
         assert all(0 <= ts < te <= DUR[v] and abs((te - ts) - 2.0) < 0.011 for ts, te in segs)
@@ -43,13 +44,13 @@ def test_noise_hits_target_and_keeps_k():
         starts = np.sort(rng.uniform(0, d - 20, 5))
         gt[f"v{i}"] = [[round(float(s), 2), round(float(s + rng.uniform(2, 15)), 2)] for s in starts]
         dur[f"v{i}"] = d
-    dirs = bs.noise_dirs(gt, 0)
-    for t in bs.NOISE_TARGETS:
-        a, got, part = bs.calibrate(gt, dur, dirs, t, 0.1)
-        assert abs(got - t) <= bs.NOISE_TOL
+    dirs = un.noise_dirs(gt, 0)
+    for t in un.NOISE_TARGETS:
+        a, got, part = un.calibrate(gt, dur, dirs, t, 0.1)
+        assert abs(got - t) <= un.NOISE_TOL
         assert all(len(part[v]) == len(gt[v]) for v in gt)
         assert all(0 <= s[0] < s[1] <= dur[v] for v in part for s in part[v])
-    assert bs.paired_tiou(gt, gt) == pytest.approx(1.0)
+    assert un.paired_tiou(gt, gt) == pytest.approx(1.0)
 
 
 def test_r1_is_the_normalised_mean():
@@ -75,7 +76,7 @@ def test_zscore_uses_no_label_and_c1z_picks_by_fill():
 def test_article_folds():
     art = {f"v{i}": i % 7 for i in range(50)}
     nq = {f"v{i}": 1 + i % 4 for i in range(50)}
-    f = bs.article_folds(art, nq, 0)
+    f = un.article_folds(art, nq, 0)
     assert set(f) == set(art)
     assert not ({art[v] for v, x in f.items() if x == "A"} & {art[v] for v, x in f.items() if x == "B"})
     tot = {x: sum(nq[v] for v, y in f.items() if y == x) for x in "AB"}
@@ -102,7 +103,7 @@ def test_global_bonus_gamma_zero_is_r8():
     g = idx.mean_pooled("g")
     for m in hm.MODES:
         base = hm.text_to_video(idx, text, caps, m)
-        zero = hm.text_to_video(idx, text, caps, m, bonus=bs.global_bonus(text["emb"], idx, g, 0.0))
+        zero = hm.text_to_video(idx, text, caps, m, bonus=un.global_bonus(text["emb"], idx, g, 0.0))
         assert np.array_equal(base["ranks"], zero["ranks"]) and np.array_equal(base["vcmr"], zero["vcmr"])
 
 
@@ -116,7 +117,7 @@ def test_boot_with_seeds_on_either_side():
 
 def test_context_fusion_split_masks_same_text_and_cross_fits():
     import torch
-    from uemr_htstep import cf
+    from uemr_htstep._unused import cf
 
     vids, idx, caps, text = _toy()
     feats = {v: (np.random.default_rng(6).standard_normal((16, 12)).astype(np.float32), np.linspace(0, 30, 16).astype(np.float32)) for v in vids}

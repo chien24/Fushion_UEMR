@@ -1,4 +1,4 @@
-"""Context Fusion on HT-Step by cross-fitting over two article folds (plan bổ sung §5.2), with the YC2 module unchanged.
+"""NOT RUN (docs/uemr_chot/UEMR_CHOT_00 §5). Context Fusion on HT-Step by cross-fitting over two article folds (plan bổ sung §5.2), with the YC2 module unchanged.
 
 ``uemr_fusion.model.ContextFusion``, its losses and its caption sampler are reused as they are; the hyper-parameters are the
 frozen YC2 config (``uemr_fusion.train`` defaults, run D3), read from the add-on protocol. Two things differ from
