@@ -388,3 +388,11 @@ def test_no_size_cap_keeps_the_other_file_checks(tmp_path):
     check(Loader(), str(small))
     with pytest.raises(FileNotFoundError):
         check(Loader(), str(tmp_path / "missing.mp4"))
+
+
+def test_train_teacher_mean(tmp_path):
+    from uemr_htstep.run_uniav import train_teacher_mean
+
+    np.savez(tmp_path / "a.npz", emb=np.array([[3.0, 0.0], [0.0, 2.0]], np.float16))
+    np.savez(tmp_path / "b.npz", emb=np.array([[0.0, -5.0]], np.float16))
+    assert np.allclose(train_teacher_mean(tmp_path), [1 / 3, 0.0])

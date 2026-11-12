@@ -4,6 +4,7 @@
         --step-emb step_emb_iv2j.npz --feat-dir k400_feats --omni-dir omni_av_feats --videos gallery.txt --out DIR
     python -m uemr_htstep.run_uniav check --uniav-repo R --annotations A --taxonomy T --out DIR --hf-csv predictions_val_seen.csv
     python -m uemr_htstep.run_uniav student ...same as proposals... --segments DIR/segments --names r0 r2 ...
+    python -m uemr_htstep.run_uniav omni ...same as proposals... --train-teacher <teacher set>/train
 
 ``proposals`` appends one line per video to ``DIR/uniav_raw.jsonl`` (a rerun skips the videos that are in it): the raw
 proposals of both article modes in seconds, the article of the model, and the span-head / teacher cosines of the video.
@@ -160,6 +161,56 @@ def cmd_student(a, model, ds, uh) -> None:
         print(f"{path}: {len(ids[n])} segments, sha256 {sha256(path)}")
 
 
+def train_teacher_mean(folder) -> np.ndarray:
+    """Mean of every L2-normalised train teacher vector in ``folder`` (``<id>.npz`` with ``emb``). HanLi's
+    ``omni_teacher_mean`` averages the same rows minus the few segments its dataset drops (they start after the features
+    end), which needs the train features; the difference is checked against the checkpoint's own OmniCosC."""
+    total, n = 0.0, 0
+    for f in sorted(os.listdir(folder)):
+        if f.endswith(".npz"):
+            with np.load(os.path.join(folder, f)) as z:
+                e = z["emb"].astype(np.float64)
+            total = total + (e / np.maximum(np.linalg.norm(e, axis=1, keepdims=True), 1e-6)).sum(0)
+            n += len(e)
+    return (total / max(n, 1)).astype(np.float32)
+
+
+def cmd_omni(a, model, ds, uh) -> None:
+    """Plan chốt 01 §6: span head vs teacher on the GT segments of every video, article GT and article predicted, with
+    HanLi's ``omni_student_teacher_scores`` (OmniCos, OmniCosC, OmniR@1); and the check that changing the GT ``cand`` of a
+    video leaves the main mode unchanged, on the first ``--cand-check`` videos."""
+    import torch
+    from libs.utils.train_utils import omni_student_teacher_scores
+
+    row_of = {x["id"]: i for i, x in enumerate(ds.data_list)}
+    videos = [v.strip() for v in open(a.videos, encoding="utf-8") if v.strip()]
+    mean = torch.from_numpy(train_teacher_mean(a.train_teacher))
+    acc = {m: ([], []) for m in uh.MODES}
+    same, t0 = [], time.time()
+    for i, v in enumerate(videos, 1):
+        item = ds[row_of[v]]
+        for m in uh.MODES:
+            r = uh.predict(model, item, m)
+            if len(r["omni_teacher"]):
+                acc[m][0].append(r["omni_student"].float().cpu())
+                acc[m][1].append(r["omni_teacher"].float().cpu())
+            if m == "pred" and i <= a.cand_check:
+                other = int((item["article"] + 1) % len(model.article_steps))
+                q = uh.predict(model, dict(item, cand=torch.as_tensor(model.article_steps[other]), article=other), "pred")
+                same.append(all(torch.equal(r[k], q[k]) for k in ("segments", "scores", "labels", "omni_student")))
+        if i % 50 == 0:
+            print(f"[omni] {i}/{len(videos)} {(time.time() - t0) / i:.2f} s/video", flush=True)
+    out = {"train_teacher": a.train_teacher, "cand_check": {"videos": len(same), "unchanged": int(sum(same))}}
+    for m, (st, te) in acc.items():
+        cos, cos_c, r1 = omni_student_teacher_scores(st, te, mean)
+        out[m] = {"segments": int(sum(len(x) for x in st)), "videos": len(st), "OmniCos": cos, "OmniCosC": cos_c, "OmniR@1": r1}
+    with open(os.path.join(a.out, "omni_checks.json"), "w", encoding="utf-8") as f:
+        json.dump(out, f, indent=1)
+    print(json.dumps(out, indent=1))
+    if len(same) and not all(same):
+        sys.exit("CHECK đổi cand GT không đổi chế độ chính: FAIL")
+
+
 def cmd_feats(a, model, ds, uh) -> None:
     """``feats.npz``: the level-0 features the span head reads (``feat0`` after ``article_cond``, main mode), (V, T, D) fp16, with
     the centre time of every step (``t_sec``) and the top-1 article: Z of Context Fusion and the input of R5 (plan bổ sung §3, §5.2)."""
@@ -199,6 +250,9 @@ def main() -> None:
     st.add_argument("--article", choices=("pred", "gt", "rand"), default="pred")
     st.add_argument("--rand-seed", type=int, default=0)
     sub.add_parser("feats", parents=[common, model_args])
+    om = sub.add_parser("omni", parents=[common, model_args])
+    om.add_argument("--train-teacher", required=True, help="<teacher set>/train: the mean removed by OmniCosC")
+    om.add_argument("--cand-check", type=int, default=20)
     ch = sub.add_parser("check", parents=[common])
     ch.add_argument("--hf-csv", default="")
     a = p.parse_args()
@@ -207,7 +261,7 @@ def main() -> None:
         return
     from uemr_htstep import uniav_htstep as uh
     model, ds = uh.load(a.uniav_repo, a.ckpt, a.annotations, a.taxonomy, a.step_emb, a.feat_dir, a.omni_dir, a.device)
-    {"proposals": cmd_proposals, "student": cmd_student, "feats": cmd_feats}[a.cmd](a, model, ds, uh)
+    {"proposals": cmd_proposals, "student": cmd_student, "feats": cmd_feats, "omni": cmd_omni}[a.cmd](a, model, ds, uh)
 
 
 if __name__ == "__main__":

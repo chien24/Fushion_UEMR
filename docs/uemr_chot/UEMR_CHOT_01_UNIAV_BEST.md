@@ -194,3 +194,32 @@ Chỉ ảnh hưởng tới số OmniCos / chọn checkpoint trên val, không �
 lệnh là `python train.py --output htstep_best` với `config.py` mặc định, không `--set`; `num_workers` để mặc định (2) như lượt cũ trên
 RTX 3060 (`colab_train.sh` cũ dùng 8, thứ tự crop ngẫu nhiên phụ thuộc số worker).
 
+### 2026-11-12, kết quả §5 (A3), notebook `uemr_chot_01_train_uniav.ipynb`
+
+Log: `notebooks/uemr/log/uemr_chot_01_train_uniav_smoke_{true,false}.pdf`. SMOKE (1 epoch) mọi CHECK OK; lượt thật mọi CHECK OK.
+HanLi `77fc4fa` (không sửa), lệnh `python train.py --output htstep_best` (config mặc định, không `--set`), A100-SXM4-40GB, Python 3.13.16,
+torch 2.14.1+cu130.
+
+- Dữ liệu: 6.336 file đặc trưng K400 (5.826 train + 510 val); bộ thầy sha256 `config.json` = `f9abbce3…`, 5.431 + 510 file, sha256 từng
+  file khớp. `validate_htstep.py`: 0 lỗi chặn; 20 video có cảnh báo số dòng đặc trưng lệch thời lượng (không chặn, có từ lượt cũ); 395 video
+  train có đặc trưng nhưng không có thầy (không có loss chưng cất); 3 video thầy chỉ phủ một phần đoạn.
+- Train: 11 epoch (early stop, patience 2, min_delta 0,3), ~135 s / epoch, 25,1 phút. Loss không NaN. Checkpoint tốt nhất (mAP) ở
+  **epoch 9**.
+- `model_best.pth.tar` sha256 **`9447de877aad65407605a338e1b946f22c140f18690aae93cf35cec5468945f0`**; Drive
+  `uemr_chot_run/uniav_best/htstep_best/`; HF `GraceFeel/uniav-htstep-best` (private).
+- Chỉ số val_seen (510 video, article GT, do `train.py` tính lúc chọn checkpoint):
+
+| | UniAV cũ (thầy cũ) | UniAV mới (thầy `best`) |
+|---|---|---|
+| mAP@[0.3:0.7] | 29.70 | 30.29 |
+| ArtAcc | 60.20 | 59.61 |
+| OmniCos / OmniCosC / OmniR@1 | 91.06 / 75.05 / 59.72 (thầy cũ, 1.080 đoạn của 179 video) | 88.08 / 72.20 / 52.04 (thầy `best`, 2.990 đoạn của 510 video) |
+
+  Hàng Omni không so trực tiếp được: thầy khác, tập đoạn khác. mAP ≥ 20 nên không cần dùng UniAV cũ (§5). Checkpoint được chọn trên
+  val_seen = kho dev.
+
+§6 chưa chạy: token HF ở máy local hết hạn, chưa tải được checkpoint / bộ thầy private. Code đã sẵn (commit sau `d195620`):
+`run_uniav omni` (OmniCos / OmniCosC / OmniR@1 hai chế độ article theo công thức `omni_student_teacher_scores` của HanLi, kèm kiểm đổi
+`cand` GT không đổi chế độ chính) và `uemr_htstep.uniav_best_checks` (bảng §6, recall theo luật θ, luật chọn nguồn đoạn). Chạy thử trên
+UniAV cũ: tái lập đúng θ 0,402, recall tIoU 0,5 = 31,74; `omni` chạy được, chế độ chính không đổi khi thay `cand` (3 / 3 video).
+
