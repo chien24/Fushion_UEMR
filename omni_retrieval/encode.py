@@ -44,7 +44,9 @@ import numpy as np
 
 from .manifest import store_keys
 
-VENDOR_DIR = Path(__file__).resolve().parent.parent / "third_party" / "omni_fix"
+# OMNI_QWENVL_DIR: the ``training/`` folder of an Omni-fix checkout instead of the vendored copy. Branch htstep_lora (ab772eb)
+# is the vendored loader plus the ``clip`` record (pre-cut clips, docs/uemr_chot/UEMR_CHOT_01 §2); video records are unchanged.
+VENDOR_DIR = Path(os.environ.get("OMNI_QWENVL_DIR") or Path(__file__).resolve().parent.parent / "third_party" / "omni_fix")
 OMNI_FIX_COMMIT = "460257f (= d8444d7 + .gitignore), branch chien"
 PAD_TOKEN_ID = 151643  # qwenvl/train/utils.py
 
