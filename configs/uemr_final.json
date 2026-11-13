@@ -1,0 +1,94 @@
+{
+ "version": 1,
+ "date": "2026-11-13",
+ "doc": "docs/uemr_chot/UEMR_CHOT_02_HTSTEP_DEV.md §7",
+ "note": "chọn trên dev HT-Step (510 video val_seen, 2.990 câu); CI của (U) - (b) lạc quan vì β* cũng chọn trên dev",
+ "models": {
+  "uniav": {
+   "repo": "GraceFeel/uniav-htstep-best",
+   "sha256": "9447de877aad65407605a338e1b946f22c140f18690aae93cf35cec5468945f0",
+   "code": "HanLi-Retriever 77fc4fa",
+   "segments_from": "mới",
+   "h_from": "mới",
+   "article": "top-1 của article_head (uemr_htstep.uniav_htstep.predict mode='pred')"
+  },
+  "omni_best": {
+   "drive": "MyDrive/omniretriever/htstep_lora/lora_bs32/eval/adapter_best",
+   "file": "adapter_model.safetensors",
+   "sha256": "5e9899aa043191a87abdfd92f19adf89282c0b3318ab38c40c41354faa9e208a",
+   "code": "https://github.com/im-xiaoming/Omni-Retriever-Custom",
+   "branch": "htstep_lora",
+   "commit": "ab772eb",
+   "note": "bản materialize (LoRA best + head pt) mà eval_htstep.py đã chấm; ckpt/best trên Drive chỉ có lora_only.safetensors"
+  },
+  "omni_pt": {
+   "repo": "nguyenminh04/omni-adapters",
+   "dir": "omniretriever-7b",
+   "file": "adapter_model.safetensors",
+   "sha256": "31e81f1c43ad7b3b37b5155ad84db9f87d28128cef9ea6c02e6c3d22df380143"
+  }
+ },
+ "params": {
+  "theta": 0.402,
+  "r6_postprocess": {
+   "k_max": 30,
+   "d_min": 2.0,
+   "merge_tiou": 0.7
+  },
+  "l_min": 5.0,
+  "l_fill": 10.0,
+  "beta_star": 1.0,
+  "agg": "max",
+  "omni_vectors": "fp16"
+ },
+ "rules": {
+  "r2_chunk": "L sao cho tổng clip R2 gần nhất tổng clip R8 trên từng bộ (uemr_htstep.partitions.pick_chunk, 0,01 s, hoà lấy L lớn hơn); không dùng nhãn",
+  "zscore": "μ, σ của cos trên mọi cặp (câu của kho, đoạn R8 của kho), cho (b) và (S); tính lại trên từng bộ; không dùng nhãn",
+  "text_normalize": "uemr_htstep.data.normalize: lower, bỏ dấu câu, gộp khoảng trắng",
+  "multi_positive": "câu đúng khi video chứa bước có text giống hệt sau normalize (lower, bỏ dấu câu, gộp khoảng trắng), kể cả chính video của câu; VCMR multi: đoạn điểm cao nhất của video đúng tốt nhất phải có tIoU >= 0.5 với một bước có cùng text trong chính video đó",
+  "query": "câu mô tả của bước GT, nguyên văn"
+ },
+ "main_method": "UEMR-Full",
+ "columns": {
+  "UEMR-Omni": "(b) trên R8",
+  "UEMR-Lite": "(S) trên R8",
+  "UEMR-Full": "(U) β = 1 trên R8",
+  "UEMR-Hybrid": "C1 z-score trên R8"
+ },
+ "dev_values": {
+  "zscore": {
+   "b": [
+    0.05297164878302035,
+    0.03741704418815904
+   ],
+   "S": [
+    0.056511041965940714,
+    0.04026154115106559
+   ]
+  },
+  "chunk_sec": 11.89,
+  "clips_r8": 16939,
+  "(U) - (b) R8 multi": "[+1.53, +5.98]"
+ },
+ "eval": {
+  "metrics": [
+   "R@1",
+   "R@5",
+   "R@10",
+   "MdR",
+   "VCMR R@1"
+  ],
+  "modes": [
+   "multi",
+   "strict"
+  ],
+  "main_mode": "multi",
+  "bootstrap": {
+   "unit": "video",
+   "n_boot": 1000,
+   "seed": 0,
+   "ci": 95,
+   "code": "omni_retrieval.evaluate.paired_bootstrap"
+  }
+ }
+}

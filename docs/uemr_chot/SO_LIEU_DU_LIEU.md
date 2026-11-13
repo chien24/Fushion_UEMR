@@ -1,6 +1,6 @@
 # Số liệu dữ liệu (để viết báo cáo)
 
-Cập nhật 2026-11-12. Mỗi số có nguồn. Số chưa đo ghi "chưa có". Không so số HT-Step với YouCook2.
+Cập nhật 2026-11-13. Mỗi số có nguồn. Số chưa đo ghi "chưa có". Không so số HT-Step với YouCook2.
 
 ## 1. HT-Step: video và vai trò
 
@@ -42,6 +42,7 @@ Kiểm đường encode: 20 clip GT val so với `val_embeds_best.npz` cos trung
 | `nguyenminh04/htstep-val-seen-videos` | mp4 val_seen | video gốc | nguồn video val |
 | `GraceFeel/htstep-omni-clips` | 6.993 train + 510 val | clip cắt sẵn (8 khung + 8 s tiếng) | train Omni `best` |
 | `GraceFeel/encode_omni` (`htstep_uemr/a4ca43db/`) | 510 val | 41.248 clip (R0–R8, R7) + 2.990 text, Omni `best` | truy hồi trên dev (lượt dev 1) |
+| `GraceFeel/encode_omni` (`uemr_final/dev/best/clips/`) | 510 val | 36.119 clip mới (R2, R3, R6, R8 của UniAV mới), Omni `best`, 0 lỗi | truy hồi trên dev (file 02, 2026-11-13) |
 | `GraceFeel/htstep-omni-av-best` | 5.431 train + 510 val | vector thầy của đoạn GT | train UniAV (A3) |
 | `nguyenminh04/htstep-feats-k400`, `htstep-val-seen-feats` | train / val | đặc trưng K400 + BEATs, 1 dòng / giây | đầu vào UniAV |
 

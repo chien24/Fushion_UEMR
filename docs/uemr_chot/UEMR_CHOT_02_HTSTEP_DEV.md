@@ -156,3 +156,82 @@ chạy ở local bằng `final_dev score` (numpy, không GPU) thay vì trong not
 **Tự kiểm `final_dev score`** trên dữ liệu lượt dev 1 (đoạn cũ, cache cũ): cột (b) của R0, R2, R3, R6, R7, R8 × strict / multi khớp
 `metrics_best.json` (12 / 12 hàng, sai khác 0); CHECK β = 0 = (b) OK.
 
+### 2026-11-13 (user chạy Colab §5, agent chấm local §6–8)
+
+**§5 encode** (`notebooks/uemr/uemr_final_dev.ipynb`, A100-SXM4-40GB, log `notebooks/uemr/log/uemr_final_dev_smoke_{true,false}.pdf`).
+SMOKE = True và SMOKE = False: mọi CHECK OK (protocol dev 1, sha256 adapter `5e9899aa…`, sha256 `segments.npz` cache dev 1, sha256
+`r2/r8.json` = `selected.json`, `r3/r6.json` = `rows.json`, kho 510 video, mp4 đọc được bằng decord, thời lượng mp4 = protocol, GPU, môi
+trường encode transformers 4.51.3, WAVE-7B + BEATs). Clip khác nhau 36.881, có trong cache 762, **mới 36.119** (theo dòng: R2 16.939, R3
+2.276, R6 3.001, R8 16.904). Lỗi **0 clip (0,00 %)**, CHECK ≤ 2 % OK. Encode resume: một lượt trước đã ghi 11.620 clip vào store Drive,
+lượt cuối encode 20 + 24.479 clip (1 giờ 55 phút, 0,231–0,246 s/clip). Store 183 chunk, upload `GraceFeel/encode_omni`
+`uemr_final/dev/best/clips/` (505 MB); agent tải về, đếm 36.119 khoá = số clip mới.
+
+**§6 chấm** (`final_dev score`, local CPU, store vừa tải + cache dev 1 cho text, R0, R7 và 762 clip trùng). Clip thiếu vector Omni: 0 ở mọi
+dòng. Phân bố điểm trên mọi cặp (câu, đoạn R8): (b) μ 0,0530, σ 0,0374; (S) μ 0,0565, σ 0,0403 (hai cột cùng thang vì (S) giờ dùng
+text Omni `best`, không còn text của thầy cũ như lượt dev 1, nơi (S) có μ ≈ 0,60). **CHECK β = 0 cho đúng mảng hạng (b): OK.**
+
+β → R@1 multi (U)_β trên R8: 0 → 59,60; 0,1 → 61,44; 0,2 → 61,30; 0,3 → 62,44; 0,5 → 63,21; 1,0 → **63,34**.
+
+**§7 chọn và khoá** (luật ghi trước, áp nguyên):
+- **β\* = 1,0.** Lưu ý: β\* nằm ở biên trên của lưới; R@1 gần như phẳng từ 0,5 (63,21) đến 1,0 (63,34). Không mở rộng lưới vì plan cố
+  định lưới. β = 1 là cộng đều (b) + (S), hợp lý khi hai cột cùng thang.
+- (U)_1 − (b) trên R8, multi R@1: **+3,75 [+1,53, +5,98]** (cận dưới > 0) → **phương pháp chính: UEMR-Full** ((b) + 1,0 · (S) trên R8).
+  Đây là lựa chọn trên dev; CI lạc quan vì β\* cũng chọn trên dev. Strict: +1,84 [−0,31, +4,11] (chứa 0).
+- Nguồn đoạn R6 và `h_i`: UniAV mới (luật file 01 §6, mAP article đoán 20,14 > 19,55).
+- **`configs/uemr_final.json` khoá**, sha256 **`c9840ffbc964a4b0ed70baee157213adaaa6526178316c80a8435e7d2fcdbde3`**: UniAV sha256 `9447de87…`, adapter `best` `5e9899aa…`, adapter pt `31e81f1c…`,
+  θ 0,402, R6 hậu xử lý (k_max 30, d_min 2,0, merge tIoU 0,7), L_min 5, L_fill 10, β\* 1,0, luật L của R2 (`pick_chunk`), luật z-score
+  (μ, σ tính lại trên từng kho, giá trị dev ghi kèm), chuẩn hoá text, multi-positive, chỉ số, bootstrap (video, 1000, seed 0, 95 %).
+
+**§8 bảng dev, multi-positive** (R@1 / R@5 / VCMR R@1; vec/video; đầy đủ ở `results/uemr_final/dev/metrics.json`, strict cùng file):
+
+| Dòng | vec/video | (b) | (S) | (U) β = 1 | C1 |
+|---|---|---|---|---|---|
+| R0 | 1,0 | 49,00 / 80,84 / – | 50,87 / 84,52 / – | 55,08 / 88,09 / – | |
+| R1 | 1,0 | 58,13 / 86,69 / – | 55,05 / 86,66 / – | 58,86 / 87,63 / – | |
+| R2 | 33,2 | 57,83 / 89,16 / 10,60 | 56,52 / 88,09 / 8,70 | 62,04 / 90,90 / 11,77 | |
+| R3 | 5,9 | 53,38 / 87,83 / 4,41 | 55,89 / 87,39 / 5,72 | 57,99 / 89,03 / 6,42 | |
+| R6 | 5,9 | 57,49 / 87,36 / 24,48 | 58,39 / 85,95 / 22,07 | 61,57 / 88,46 / 26,45 | |
+| **R8** | 33,2 | 59,60 / 90,07 / 15,92 | 58,56 / 88,19 / 15,05 | **63,34 / 90,90 / 21,34** | 58,90 / 89,77 / 15,75 |
+| R7 (GT, trần) | 5,9 | 65,05 / 92,07 / 56,05 | 66,62 / 90,60 / 55,52 | 70,54 / 93,88 / 59,63 | |
+
+Strict R@1 (phụ lục): R8 (b) 22,51, (S) 21,64, (U) 24,35, C1 21,94; R0 (b) 18,29; R2 (b) 22,44; R6 (b) 22,47; R7 (b) 26,12.
+
+Cặp kèm CI (multi R@1, cột (b) trừ khi ghi khác; `pairs.json`):
+
+| Cặp | A − B | CI 95 % |
+|---|---|---|
+| R8 − R0 | +10,60 | [+7,24, +14,08] |
+| R6 − R0 | +8,49 | [+4,90, +11,90] |
+| R8 − R3 | +6,22 | [+3,74, +8,73] |
+| R6 − R3 | +4,11 | [+1,19, +6,91] |
+| R8 − R2 | +1,77 | [−0,53, +4,02] |
+| R6 − R1 | −0,64 | [−3,40, +2,24] |
+| R7 − R8 | +5,45 | [+2,75, +7,95] |
+| (U) − (b) trên R8 | +3,75 | [+1,53, +5,98] |
+| (S) R8 − (b) R0 | +9,57 | [+6,13, +13,08] |
+| C1 R8 − (b) R6 | +1,40 | [−0,78, +3,70] |
+| VCMR R6 − R3 | +20,07 | [+17,55, +22,59] |
+
+Đặt cạnh lượt dev 1 (UniAV thầy cũ, chỉ tham chiếu; multi R@1): (b) R8 57,99 → 59,60, R6 55,35 → 57,49, R3 55,69 → 53,38, R2 58,16 →
+57,83; (S) R8 57,56 → 58,56; (U) R8 61,34 (β = 0,1, text thầy cũ) → 63,34 (β = 1, text `best`). Hai lượt khác nhau cả đoạn lẫn text của
+(S), nên không so trực tiếp.
+
+Phân tích không tốn GPU (`groups.json`, multi trừ khi ghi khác):
+- (i) Bước bị R6 bỏ sót (tIoU < 0,3; 1.687 câu): R6 − R3 +1,48 [−1,75, +4,88], R8 − R6 **+5,69 [+2,36, +8,84]**. Bước R6 bắt được (1.303
+  câu): R6 − R3 **+7,52 [+3,87, +11,14]**, R8 − R6 −2,53 [−5,81, +0,80]. Đoạn lấp giúp đúng ở chỗ R6 bỏ sót.
+- (ii) Text trùng ở ≥ 2 video (2.488 câu): R8 − R0 strict +4,30 [+0,84, +7,76], multi +11,98 [+8,36, +15,77]. Text duy nhất (502 câu):
+  +3,78 [−3,04, +10,30] (strict = multi).
+- (iii) Tỉ lệ đoạn đứng đầu là đoạn lấp (R8): (b) 65,3 %, (S) 56,6 %, (U) 52,3 %, C1 51,7 %.
+- (iv) C3: (S) R8 article đoán − article ngẫu nhiên: **+22,58 [+19,71, +25,57]** ((S) với article ngẫu nhiên 35,99): `h_i` phụ thuộc
+  mạnh vào article.
+- (v) Spearman hạng (b) với (S) trên R8: 0,587. hit@1: cả hai đúng 1.323, chỉ (b) đúng 459, chỉ (S) đúng 428, cả hai sai 780 → hai cột
+  sai ở chỗ khác nhau, giải thích vì sao (U) hơn từng cột.
+
+Chi phí phía video (`cost.json`): clip Omni / video: UEMR-Omni / Full 33,2 (16.939 clip R8), UEMR-Hybrid 5,9 (3.003 đoạn R6), UEMR-Lite 0.
+Omni 0,231–0,246 s/clip (A100, log encode). UniAV forward + span head 0,9–1,0 s/video (CPU local, lúc tính `h_i`, §2). Trích K400 + BEATs:
+chưa có (file 03 §2).
+
+**Kết luận dev (chỉ để chọn):** event-aware R8 hơn rõ R0, R3; hơn R2 (chia đều cùng số clip) +1,77 nhưng CI chứa 0, nên trên dev chưa
+tách được lợi ích của ranh giới UniAV khỏi việc có nhiều clip hơn. Cộng (S) giúp ở mọi dòng. Benchmark YouCook2 (file 03) dùng nguyên
+`configs/uemr_final.json`.
+

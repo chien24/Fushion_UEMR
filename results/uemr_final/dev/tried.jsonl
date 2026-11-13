@@ -5,3 +5,10 @@
 {"what": "R8 cột (S), chọn L_min / L_fill (file 02 §3)", "l_min": 5.0, "l_fill": 10.0, "R@1 multi": 58.561872909699, "R@1 strict": 21.63879598662207, "clips": 16939, "theta": 0.402, "uniav_raw_sha256": "5db3e8cb69808c2b08af5c95ea3a416124bb00b9273d35bc966ef6c9af5cae87", "time": "2026-11-12 21:37:28"}
 {"what": "R8 cột (S), chọn L_min / L_fill (file 02 §3)", "l_min": 5.0, "l_fill": 15.0, "R@1 multi": 57.89297658862876, "R@1 strict": 21.37123745819398, "clips": 12475, "theta": 0.402, "uniav_raw_sha256": "5db3e8cb69808c2b08af5c95ea3a416124bb00b9273d35bc966ef6c9af5cae87", "time": "2026-11-12 21:37:34"}
 {"what": "chọn (file 02 §3)", "l_min": 5.0, "l_fill": 10.0, "R@1 multi (S)": 58.561872909699, "clips_r8": 16939, "chunk_sec": 11.89, "clips_r2": 16939, "theta": 0.402, "files": {"r8": "7e100bf09be7cf889e012330da729093ba9678586e97233a6a45c750ec96f045", "r2": "60321027b6495909715e3f2b7b30a9e0b246f06a9534d40f28576d7a8701bf76"}, "rule": "R@1 multi cao nhất của (S) trên R8; hoà lấy (5, 10) hoặc cặp gần nó nhất; L của R2: tổng clip R2 gần nhất tổng clip R8", "time": "2026-11-12 21:37:35"}
+{"what": "(U)_β trên R8 (file 02 §6)", "beta": 0.0, "R@1 multi": 59.598662207357854, "time": "2026-11-13 12:43:52"}
+{"what": "(U)_β trên R8 (file 02 §6)", "beta": 0.1, "R@1 multi": 61.438127090300995, "time": "2026-11-13 12:43:52"}
+{"what": "(U)_β trên R8 (file 02 §6)", "beta": 0.2, "R@1 multi": 61.30434782608696, "time": "2026-11-13 12:43:52"}
+{"what": "(U)_β trên R8 (file 02 §6)", "beta": 0.3, "R@1 multi": 62.44147157190636, "time": "2026-11-13 12:43:52"}
+{"what": "(U)_β trên R8 (file 02 §6)", "beta": 0.5, "R@1 multi": 63.21070234113713, "time": "2026-11-13 12:43:52"}
+{"what": "(U)_β trên R8 (file 02 §6)", "beta": 1.0, "R@1 multi": 63.34448160535116, "time": "2026-11-13 12:43:52"}
+{"what": "chọn β*, phương pháp chính (file 02 §7)", "beta_star": 1.0, "(U) - (b) R8 multi": {"mode": "multi", "chỉ số": "R@1", "cột": "U / b", "cặp": "(U) - (b) R8", "A - B": 3.7458193979933108, "CI": "[+1.53, +5.98]", "ci_low": 1.5315985769778417, "ci_high": 5.976470037716609}, "main_method": "UEMR-Full", "time": "2026-11-13 12:43:52"}
