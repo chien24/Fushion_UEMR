@@ -1,8 +1,8 @@
-"""Post-processing of Athena proposals into the segments UEMR uses (UEMR_FINAL.md, section A).
+"""Post-processing of UniAV proposals into the R6 segments (moved unchanged from ``uniav_app/postprocess.py``).
 
 Pure functions on lists of dicts with ``ts``, ``te`` (seconds) and ``conf``; other keys are carried along.
 
-Config ``uemr`` (default), in this order:
+In this order:
   1. keep proposals with conf >= theta, at most K_max (highest conf first);
   2. if nothing is left, keep the highest-confidence proposal;
   3. merge proposals with tIoU > merge_tiou: replace the pair by its union [min ts, max te] with
@@ -10,13 +10,14 @@ Config ``uemr`` (default), in this order:
   4. extend segments shorter than d_min symmetrically around their centre, shifted inwards at the
      video borders, never outside [0, duration];
   5. sort by time.
-Config ``api``: ``athena.pipeline.select_events`` (min_score 0.40, max_overlap 0.3, max_events 30), called
-unchanged through ``athena_api.select_events``.
 """
 
 from __future__ import annotations
 
-from .match import tiou
+def tiou(a, b) -> float:
+    inter = max(0.0, min(a[1], b[1]) - max(a[0], b[0]))
+    union = (a[1] - a[0]) + (b[1] - b[0]) - inter
+    return float(inter / union) if union > 0 else 0.0
 
 
 def filter_theta(props: list[dict], theta: float) -> list[dict]:
@@ -79,16 +80,3 @@ def postprocess_uemr(props: list[dict], duration: float | None, theta: float, k_
     kept = merge_overlaps(kept, merge_tiou)
     kept = extend_short(kept, d_min, duration)
     return sort_by_time(kept)
-
-
-def postprocess_api(props: list[dict], min_score: float = 0.40, max_overlap: float = 0.3,
-                    max_events: int = 30) -> list[dict]:
-    """Athena's own event choice (``select_events``): returns the kept proposals, sorted by time."""
-    import numpy as np
-
-    from .athena_api import select_events
-    if not props:
-        return []
-    secs = np.array([[p["ts"], p["te"]] for p in props], dtype=np.float32)
-    scores = np.array([p["conf"] for p in props], dtype=np.float32)
-    return [dict(props[i]) for i in select_events(secs, scores, min_score, max_overlap, max_events)]

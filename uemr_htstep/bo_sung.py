@@ -1,6 +1,6 @@
 """Score columns and analyses kept from the HT-Step add-on plan for the final plan (docs/uemr_chot/UEMR_CHOT_00 §5): the
-label-free z-score (C1z = UEMR-Hybrid) and the query groups. The rows and columns that are not run (R3@K_GT, R4, R5, boundary
-noise, Exp 5, Context Fusion folds, S_G) are in ``uemr_htstep/_unused/bo_sung.py``.
+label-free z-score (C1z = UEMR-Hybrid) and the query groups. The rows and columns that were never run (R3@K_GT, R4, R5,
+boundary noise, Exp 5, Context Fusion folds, S_G) were removed; they are in the git history before the 2026-11-13 clean-up.
 """
 
 from __future__ import annotations

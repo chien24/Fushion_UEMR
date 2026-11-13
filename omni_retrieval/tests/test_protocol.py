@@ -18,24 +18,6 @@ def test_protocol_values_reach_the_code():
     assert P["partitions"]["pooled"] == POOLED
 
 
-def test_uniav_app_defaults_match_protocol():
-    """``uniav_app`` stays independent of ``omni_retrieval`` (own runtime), so its defaults are checked here."""
-    from uniav_app.config import THETA_GRID, Config
-    post = P["uniav"]["postprocess"]
-    c = Config()
-    assert (c.k_max, c.d_min, c.merge_tiou) == (post["k_max"], post["d_min"], post["merge_tiou"])
-    assert list(THETA_GRID) == post["theta"]["grid"]
-
-
-def test_theta_rule_on_the_logged_dev_sweep():
-    """K_pred on dev of the current UniAV ([UA c22]) -> 0.40, as reported; a tie goes to the smaller theta."""
-    from uniav_app.evaluate import choose_theta
-    k_dev = {0.25: 17.490, 0.30: 12.298, 0.35: 9.029, 0.40: 6.952, 0.45: 5.087, 0.50: 2.817}
-    rows = [{"split": "dev", "theta": t, "mean_K_pred": k, "mean_K_GT": 7.433} for t, k in k_dev.items()]
-    rows += [{"split": "val", "theta": t, "mean_K_pred": 7.69, "mean_K_GT": 7.69} for t in k_dev]   # never used
-    assert choose_theta(rows, "dev") == (P["reference_current_uniav"]["theta"], "dev")
-
-
 def test_miss_rate():
     gt = {"A": [[0.0, 10.0], [20.0, 30.0]], "B": [[0.0, 4.0]]}
     part = {"A": [[0.0, 9.0]], "B": [[3.0, 20.0]]}                     # A: 0.9, 0.0 ; B: 1/20

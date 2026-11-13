@@ -36,8 +36,9 @@ def uniav_annotations(durations: dict, step_id: int) -> dict:
 
 
 def build_rows(props: dict, dur: dict, gt: dict, cfg: dict) -> tuple[dict, dict]:
-    """``({name: {video: segments}}, info)`` with the numbers of the config. A video without any proposal above θ has no
-    R6 and no R3 segment (it cannot be retrieved by those rows); its R8 is the fill windows alone."""
+    """``({name: {video: segments}}, info)`` with the numbers of the config. ``postprocess_uemr`` keeps the top-1 proposal
+    when none reaches θ, so only a video without any proposal at all has no R6 and no R3 segment (it cannot be retrieved
+    by those rows); its R8 is the fill windows alone."""
     p, pp = cfg["params"], cfg["params"]["r6_postprocess"]
     vids = sorted(dur)
     r6 = {v: hp.r6(props[v], dur[v], p["theta"], pp["k_max"], pp["d_min"], pp["merge_tiou"]) for v in vids}

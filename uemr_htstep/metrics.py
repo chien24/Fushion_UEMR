@@ -20,9 +20,28 @@ from collections import defaultdict
 import numpy as np
 
 from omni_retrieval.search import tiou_vec
-from uemr2.uemr2_core import maxsim
 
 MODES = ("strict", "multi")
+
+
+def maxsim(s: np.ndarray, seg_vid: np.ndarray, n_vid: int) -> tuple[np.ndarray, np.ndarray]:
+    """Video score = max over its segments (moved unchanged from ``uemr2/uemr2_core.py``). Returns (C, V) scores and (C, V) argmax segment
+    index (global row in s), -1 for a video with no segment."""
+    C = s.shape[0]
+    score = np.full((C, n_vid), -np.inf, np.float32)
+    arg = np.full((C, n_vid), -1, np.int64)
+    order = np.argsort(seg_vid, kind='stable')
+    sv = seg_vid[order]
+    starts = np.searchsorted(sv, np.arange(n_vid))
+    ends = np.searchsorted(sv, np.arange(n_vid), side='right')
+    for v in range(n_vid):
+        if ends[v] > starts[v]:
+            idx = order[starts[v]:ends[v]]
+            blk = s[:, idx]
+            j = blk.argmax(1)
+            score[:, v] = blk[np.arange(C), j]
+            arg[:, v] = idx[j]
+    return score, arg
 
 
 def right_answers(q_keys, q_heads, cand_keys, cand_heads, mode: str) -> np.ndarray:

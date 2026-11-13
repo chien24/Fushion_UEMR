@@ -29,6 +29,15 @@ Nhật ký cuối file 01 và 02; số liệu cho báo cáo ở `SO_LIEU_DU_LIEU
 
 ## Lưu ý cho phiên sau
 
+- **Dọn repo 2026-11-13** (yêu cầu của user): chỉ còn code của plan chốt: `uemr_htstep/`, phần `omni_retrieval/` mà nó dùng (encode, collect,
+  manifest, evaluate, search, partitions, partitions_uemr, bo_sung, protocol, config, subset), `third_party/omni_fix`, `configs/`, `tests/`.
+  Đã xoá `uemr2/`, `uemr_fusion/`, `uniav_app/`, `third_party/athena`, `uemr_htstep/_unused/`, `teacher_encode.py`, notebook và config YouCook2 cũ,
+  phần HT-Step bổ sung chưa chạy. Hai hàm còn dùng được chuyển nguyên văn: `postprocess_uemr` → `uemr_htstep/postprocess.py`, `maxsim` →
+  `uemr_htstep/metrics.py`. Kiểm sau khi dọn: 95 test pass; chạy lại `final_dev rows` + `score` ra thư mục tạm cho 32 / 32 file kết quả, bộ đoạn và
+  `uemr_final.json` trùng hệt bản đã khoá. Giữ làm kinh nghiệm HT-Step: `results/uemr_htstep/a4ca43db/` (lượt dev 1) và
+  `notebooks/uemr/uemr_htstep_AZ.ipynb`. Code cũ vẫn lấy lại được từ git (commit trước dọn: `3cbd0a7`); các notebook chốt ghim commit cũ nên
+  không bị ảnh hưởng.
+
 - Chạy module Fushion bằng `PYTHONPATH=. D:/miniconda/conda-envs/omni/python.exe -X utf8 -m …` (không dùng `-I`, nếu không sẽ không import được
   `uemr_htstep`); test: thêm `UNIAV_REPO=D:/Học/KL/Code/UniAV/UniAV-fixed`.
 - Token HF mới nằm ở `D:/Học/KL/Code/pipeline/.env` (`HF_TOKEN`, tài khoản `GraceFeel`); token trong `~/.cache/huggingface` đã hết hạn.

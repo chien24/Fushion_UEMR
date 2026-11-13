@@ -2,7 +2,7 @@
 
 import pytest
 
-from uniav_app.postprocess import (extend_short, filter_theta, merge_overlaps, postprocess_uemr, sort_by_time,
+from uemr_htstep.postprocess import (extend_short, filter_theta, merge_overlaps, postprocess_uemr, sort_by_time,
                                    top_k)
 
 
@@ -61,12 +61,3 @@ def test_full_order_merge_then_extend():
     props = [P(10, 11, 0.9), P(10.05, 11, 0.8), P(40, 41, 0.7)]
     out = postprocess_uemr(props, 41.5, theta=0.5, k_max=30, d_min=2.0, merge_tiou=0.7)
     assert [(round(s["ts"], 3), round(s["te"], 3), s["conf"]) for s in out] == [(9.5, 11.5, 0.9), (39.5, 41.5, 0.7)]
-
-
-def test_api_config_uses_athena_select_events():
-    pytest.importorskip("torch")
-    pytest.importorskip("yaml")
-    from uniav_app.postprocess import postprocess_api
-    props = [P(0, 10, 0.9), P(1, 10, 0.8), P(20, 30, 0.5), P(40, 50, 0.2)]
-    out = postprocess_api(props, min_score=0.4, max_overlap=0.3, max_events=30)
-    assert [(s["ts"], s["te"]) for s in out] == [(0, 10), (20, 30)]   # (1,10) overlaps 0.9 > 0.3; 0.2 < 0.4

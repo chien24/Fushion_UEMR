@@ -12,7 +12,7 @@ import numpy as np
 from omni_retrieval.bo_sung import fill_gaps, pick_level
 from omni_retrieval.partitions import uniform
 from omni_retrieval.partitions_uemr import _round, uni_chunk
-from uniav_app.postprocess import postprocess_uemr
+from .postprocess import postprocess_uemr
 
 ROWS = {"global": "R0", "uni_chunk": "R2", "uni_M": "R3", "uniav_pred": "R6", "r8": "R8", "uniav_gtart": "R6gt",
         "gt": "R7"}

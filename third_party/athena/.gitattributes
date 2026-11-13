@@ -1,3 +1,0 @@
-# Vendored files must stay byte-identical to Athena commit 48918c5 (SHA256 in VENDORED.md):
-# no end-of-line conversion (LICENSE has CRLF upstream; core.autocrlf would turn it into LF).
-* -text

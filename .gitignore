@@ -19,7 +19,6 @@ tmp/
 *.mp4
 
 notebooks/
-!third_party/athena/**/*.npz
 
 # Local docs (not pushed)
 docs/
