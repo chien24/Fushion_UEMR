@@ -9,7 +9,7 @@ Notebook `notebooks/uemr/uemr_final_benchmark.ipynb`, ô `# ===== N.`, cờ `BEN
 
 | Mã | Bộ | Bắt buộc | Ghi chú |
 |---|---|---|---|
-| `yc2` | YouCook2, split validation (annotation chính thức) | có | mọi video tải được, có tiếng |
+| `yc2` | YouCook2, **train + val** (annotation chính thức; đổi từ "split validation" ngày 2026-11-13, xem Nhật ký) | có | mọi video tải được, có tiếng |
 | `anet` | ActivityNet Captions `val_1` | chỉ khi user thêm vào `BENCHMARKS` | lấy mẫu cố định 1.000 video tải được, seed 0; khác miền (UniAV, Omni `best` học trên nấu ăn) |
 | khác | do user chọn | | điều kiện: có ranh giới từng bước + câu mô tả từng bước, video có tiếng, tải được |
 
@@ -133,3 +133,21 @@ tốc độ trên A100 chưa đo (ô 5 in sau 5 video).
 
 Còn trống, điền sau khi có log Colab: số "có tiếng" / "đọc được", CHECK annotation chính thức, CHECK tái lập đặc trưng, tốc độ trích,
 sha256 danh sách video và câu hỏi, số clip lỗi.
+
+### 2026-11-13 (quyết định của user): kho YouCook2 = train + val; notebook không ghi Drive
+
+- **Đổi so với plan gốc:** kho benchmark `yc2` là **mọi video YouCook2 có annotation và có mp4** (train + val), không chỉ split validation.
+  Lý do của user: muốn dùng toàn bộ video đang có. Hợp lệ với zero-shot vì trong plan chốt không model nào train trên YouCook2 (UniAV: HT-Step;
+  Omni `best`: adapter pt gốc + LoRA HT-Step). Quyết định trước khi có bất kỳ số truy hồi nào trên YouCook2 của plan này. Hạn chế đã ghi vẫn
+  giữ: dữ liệu pretrain của Omni gốc không kiểm trùng hết được.
+- **Đếm ở local** (`D:/Học/KL/Data/YouCookII`): annotation 1.790 video (1.333 train, trong đó 104 từng gắn nhãn `dev` ở các lượt YC2 cũ; 457
+  val); có mp4 **1.500** (1.002 + 104 + 394); 11.594 bước có câu (trước khi cắt theo mp4); 131,5 giờ video (riêng val 34,2 giờ, tức kho mới
+  gấp ~3,8 lần). Trùng YouTube ID với train UniAV / train Omni / dev 510: 0 / 0 / 0.
+- **Lỗi notebook B:** ô 3 đòi `metadata/youcookii_annotations_uemr.json` trên Drive, Drive của user không có file này. Sửa: annotation nằm
+  trong repo (`configs/yc2/youcookii_annotations_uemr.json`, bản local đã dùng), vẫn đối chiếu với bản chính thức (video, đoạn, câu) nếu tải
+  được; CHECK số video 1.790.
+- **Không ghi Drive** (Drive của user gần đầy): đầu ra ở `/content/uemr_chot_run/bench/yc2`, đẩy HF `GraceFeel/uemr-bench-yc2` (private) sau
+  mỗi ô và mỗi 20 phút; ô 1 tải lại từ HF để resume. Drive chỉ còn được đọc (video, adapter `best`).
+- Code: `bench.yc2(database, subset=None)` (commit `12c7775`); notebook `FUSHION_REF = 12c7775`, cờ `YC2_SUBSET = None`. Chưa chạy.
+- **Ước lượng mới (chưa đo):** ô 6a ~14.600 clip (R0 + R7 `best`, R0 pt) ≈ 1,0–1,3 giờ A100; trích K400 + BEATs cho 131,5 giờ video: chưa đo
+  (ô 5 in tốc độ sau 5 video). Các ô sau (R2, R3, R6, R8 `best` + R8 pt) ước ~165.000 clip ≈ 11–15 giờ A100, chia nhiều phiên được nhờ resume.

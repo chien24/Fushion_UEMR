@@ -4,14 +4,15 @@ Cập nhật 2026-11-12. File này chỉ nói **thứ tự chạy**. Nội dung 
 
 ## Trước khi chạy bất cứ notebook nào
 
-1. `git push` nhánh `htstep` của `D:\Học\KL\Code\Fushion`. Hai notebook bên dưới clone repo theo `FUSHION_REF = cdb2fac`; chưa push thì ô 1
+1. `git push` nhánh `htstep` của `D:\Học\KL\Code\Fushion`. Notebook benchmark clone repo theo `FUSHION_REF = 12c7775` (notebook 01: `cdb2fac`); chưa push thì ô 1
    báo "không checkout được".
 2. Colab Secrets có `HF_TOKEN` của tài khoản `GraceFeel` (đọc `GraceFeel/htstep-omni-clips`, ghi `GraceFeel/htstep-omni-av-best`). Với
    notebook benchmark, tài khoản đó phải đã bấm chấp nhận licence ở hai trang model `OpenGVLab/InternVideo2-Stage1-1B-224p-K400` và
    `OpenGVLab/InternVideo2-Stage2-6B-Audio`.
 3. Trên Drive phải có sẵn (đều từ các lượt trước):
    - `MyDrive/omniretriever/htstep_lora/lora_bs32/eval/val_embeds_best.npz` (notebook 01 ô 6 cần file này);
-   - `MyDrive/Colab Notebooks/code KL/Omni/data/YouCookII/{metadata,videos}` (notebook benchmark).
+   - `MyDrive/Colab Notebooks/code KL/Omni/data/YouCookII/videos` (notebook benchmark, chỉ đọc; annotation lấy từ repo, đầu ra ghi `/content` và
+     đẩy HF `GraceFeel/uemr-bench-yc2`, không ghi Drive).
 4. Runtime A100, đĩa `/content` trống ít nhất 70 GB.
 
 ## Thứ tự
@@ -24,7 +25,7 @@ Nhánh A và nhánh B không phụ thuộc nhau, mở hai phiên Colab chạy so
 | A2 | A | Colab A100 | cùng notebook | `SMOKE = False` | ~3,7 giờ (encode ~3,0 giờ) | bộ thầy `GraceFeel/htstep-omni-av-best` + tar trên Drive |
 | A3 | A | Colab A100 | `notebooks/uemr/uemr_chot_01_train_uniav.ipynb` | `SMOKE = True`, rồi `False` | tải ~10 phút + train (lượt cũ ~46 phút trên RTX 3060) | `model_best.pth.tar` mới |
 | B1 | B | Colab A100 | `notebooks/uemr/uemr_final_benchmark.ipynb` | `SMOKE = True` | ~30–40 phút | CHECK tái lập đặc trưng, 5 video YouCook2 |
-| B2 | B | Colab A100 | cùng notebook | `SMOKE = False` | ô 6a ~0,5 giờ; trích đặc trưng chưa đo | kho yc2, câu hỏi, đặc trưng, vector R0 / R7 / text |
+| B2 | B | Colab A100 | cùng notebook | `SMOKE = False` | ô 6a ~1,0–1,3 giờ; trích đặc trưng 131,5 giờ video chưa đo | kho yc2 (train + val, ~1.500 video), câu hỏi, đặc trưng, vector R0 / R7 / text; mọi thứ trên HF `GraceFeel/uemr-bench-yc2` |
 
 Sau đó (chưa viết, agent làm khi có đầu ra của các bước trên):
 
