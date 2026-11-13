@@ -4,7 +4,7 @@ Cập nhật 2026-11-12. File này chỉ nói **thứ tự chạy**. Nội dung 
 
 ## Trước khi chạy bất cứ notebook nào
 
-1. `git push` nhánh `htstep` của `D:\Học\KL\Code\Fushion`. Notebook benchmark clone repo theo `FUSHION_REF = 12c7775` (notebook 01: `cdb2fac`); chưa push thì ô 1
+1. `git push` nhánh `htstep` của `D:\Học\KL\Code\Fushion`. Notebook benchmark clone repo theo `FUSHION_REF = c7e020e` (notebook 01: `cdb2fac`); chưa push thì ô 1
    báo "không checkout được".
 2. Colab Secrets có `HF_TOKEN` của tài khoản `GraceFeel` (đọc `GraceFeel/htstep-omni-clips`, ghi `GraceFeel/htstep-omni-av-best`). Với
    notebook benchmark, tài khoản đó phải đã bấm chấp nhận licence ở hai trang model `OpenGVLab/InternVideo2-Stage1-1B-224p-K400` và
@@ -24,8 +24,8 @@ Nhánh A và nhánh B không phụ thuộc nhau, mở hai phiên Colab chạy so
 | A1 | A | Colab A100 | `notebooks/uemr/uemr_chot_01_teacher_best.ipynb` | `SMOKE = True` | ~25 phút | mọi CHECK OK trên 40 video train |
 | A2 | A | Colab A100 | cùng notebook | `SMOKE = False` | ~3,7 giờ (encode ~3,0 giờ) | bộ thầy `GraceFeel/htstep-omni-av-best` + tar trên Drive |
 | A3 | A | Colab A100 | `notebooks/uemr/uemr_chot_01_train_uniav.ipynb` | `SMOKE = True`, rồi `False` | tải ~10 phút + train (lượt cũ ~46 phút trên RTX 3060) | `model_best.pth.tar` mới |
-| B1 | B | Colab A100 | `notebooks/uemr/uemr_final_benchmark.ipynb` | `SMOKE = True` | ~30–40 phút | CHECK tái lập đặc trưng, 5 video YouCook2 |
-| B2 | B | Colab A100 | cùng notebook | `SMOKE = False` | ô 6a ~1,0–1,3 giờ; trích đặc trưng 131,5 giờ video chưa đo | kho yc2 (train + val, ~1.500 video), câu hỏi, đặc trưng, vector R0 / R7 / text; mọi thứ trên HF `GraceFeel/uemr-bench-yc2` |
+| B1 | B | Colab A100 | `notebooks/uemr/uemr_final_benchmark.ipynb` | `SMOKE = True` | ~40–60 phút | cả pipeline trên 5 video YouCook2 (đặc trưng → UniAV → Omni → chấm thử), mọi CHECK OK |
+| B2 | B | Colab A100 | cùng notebook | `SMOKE = False` | Omni ~180.000 clip ≈ 12–16 giờ; trích đặc trưng 131,5 giờ video chưa đo; nhiều phiên, Run all lại để chạy tiếp | **kết quả benchmark** (bảng, cặp + CI, K1–K6) + mọi thứ trung gian trên HF `GraceFeel/uemr-bench-yc2` |
 
 Sau đó (chưa viết, agent làm khi có đầu ra của các bước trên):
 
@@ -33,7 +33,7 @@ Sau đó (chưa viết, agent làm khi có đầu ra của các bước trên):
 |---|---|---|
 | A4 | A3 | file 01 §6: kiểm UniAV mới (local CPU) |
 | C (xong 2026-11-13) | A4 (xong) | file 02: notebook `notebooks/uemr/uemr_final_dev.ipynb` (A100, `SMOKE = True` rồi `False`, ~2,4–3,2 giờ): encode clip mới; agent chấm ở local và khoá `configs/uemr_final.json` |
-| D | C và B2 | file 03 §4–9: UniAV + R2 / R3 / R6 / R8 trên YouCook2, khoá protocol, chấm một lần |
+| D | B2 | agent đọc log B2, ghi Nhật ký file 03, commit `benchmark_protocol.json` + kết quả (phần chạy đã gộp vào B2) |
 | E | D | file 04: báo cáo |
 
 ## Chi tiết từng bước
@@ -50,9 +50,9 @@ rồi `SMOKE = False`. Checkpoint, `train.log`, `run_record.json`, `summary.json
 `uemr_chot_run/uniav_best/htstep_best/` và upload `GraceFeel/uniav-htstep-best` (private). `train.py` không resume được: mất runtime thì Run
 all lại. Loss NaN hoặc mAP val (article GT) < 20 thì ô 5 dừng (file 01 §5).
 
-**B1, B2 (benchmark YouCook2, phần không cần UniAV).** Run all với `SMOKE = True`, rồi `SMOKE = False`. Ô 5 (trích đặc trưng) in tốc độ và
-thời gian còn lại sau 5 video đầu; nếu quá lâu cho một phiên thì đặt `RUN_FEATS = False` để chạy ô 6a trước, rồi chạy lại với
-`RUN_FEATS = True`, `RUN_OMNI = False` ở phiên khác (video đã trích được bỏ qua). Notebook này không tính chỉ số truy hồi nào.
+**B1, B2 (benchmark YouCook2, cả pipeline + chấm).** Run all với `SMOKE = True`, rồi `SMOKE = False`. Ô 5 (trích đặc trưng) in tốc độ và
+thời gian còn lại sau 5 video đầu; ô 8 in số clip và ước lượng giờ. Hết phiên hoặc mất runtime thì Run all lại: ô 1 tải mọi thứ đã làm từ HF
+`GraceFeel/uemr-bench-yc2`, các ô bỏ qua phần đã xong. Ô 9 chấm đúng một lần; đã chấm rồi thì chỉ in lại. Runtime cần RAM cao (~25 GB ở ô 9).
 
 ## Khi nào dừng
 
@@ -63,4 +63,4 @@ thời gian còn lại sau 5 video đầu; nếu quá lâu cho một phiên thì
 
 - A1 / A2: output của ô 3, 6, 7, 8, 9, 10 (hoặc file notebook đã lưu output).
 - A3: output của ô 2, 3, 5 và `summary.json`.
-- B1 / B2: output của ô 3, 4, 5, 6a, 7.
+- B1 / B2: output của ô 3 đến 10 (hoặc file notebook đã lưu output).

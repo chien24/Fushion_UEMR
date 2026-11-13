@@ -151,3 +151,32 @@ sha256 danh sách video và câu hỏi, số clip lỗi.
 - Code: `bench.yc2(database, subset=None)` (commit `12c7775`); notebook `FUSHION_REF = 12c7775`, cờ `YC2_SUBSET = None`. Chưa chạy.
 - **Ước lượng mới (chưa đo):** ô 6a ~14.600 clip (R0 + R7 `best`, R0 pt) ≈ 1,0–1,3 giờ A100; trích K400 + BEATs cho 131,5 giờ video: chưa đo
   (ô 5 in tốc độ sau 5 video). Các ô sau (R2, R3, R6, R8 `best` + R8 pt) ước ~165.000 clip ≈ 11–15 giờ A100, chia nhiều phiên được nhờ resume.
+
+### 2026-11-13 (agent): gộp cả pipeline + chấm vào một notebook (yêu cầu của user)
+
+Notebook `uemr_final_benchmark.ipynb` giờ đi hết §1–9 trong một lần Run all (`FUSHION_REF = c7e020e`): ô 3–4 kiểm kê, câu hỏi; ô 5 đặc
+trưng; ô 6 UniAV → đoạn → `h_i`; ô 7 khoá protocol; ô 8 Omni; ô 9 chấm một lần; ô 10 tóm tắt. Code: `uemr_htstep/final_bench.py` (commit
+`c7e020e`), dùng lại hàm của lượt dev (`partitions.r6`, `fill_gaps`, `pick_chunk`, `row_indexes`, `score.run`, `score.boot`). Chưa chạy.
+
+**"Cùng phương thức với model đã train"** (yêu cầu của user), từng khâu:
+- Đặc trưng: script HanLi `extract_features.py --model k400_f16` đã tạo đặc trưng train UniAV; CHECK tái lập cos ≥ 0,99 trên 5 video HT-Step.
+- UniAV: HanLi `77fc4fa`, `HTStepDataset` không sửa, checkpoint sha256 của config, chế độ article đoán, θ = 0,402 (số của config).
+  Video benchmark được ghi theo định dạng `annotations.json` của HT-Step với một bước giữ chỗ (dataset cần ít nhất một annotation).
+  **Thử ở local trên 3 video dev:** với annotation giữ chỗ và không có vector thầy, đề xuất + article đoán trùng hệt `uniav_raw.jsonl` của
+  lượt dev; đổi bước giữ chỗ không đổi gì; `h_i` trên đoạn R6 sai khác 0 so với lượt dev. Ô 6 lặp lại CHECK đổi bước giữ chỗ trên 5 video.
+- Omni: `omni_retrieval.encode`, mp4 + `timestamps`, adapter `best` sha256 `5e9899aa…`, đúng đường cột (b) của dev.
+- Chấm: `final_bench.score`, cùng `score.run` / bootstrap theo video (1000, seed 0) với dev; β\* = 1,0 và phương pháp chính đọc từ config;
+  μ, σ của z-score và L của R2 tính lại trên kho (luật không nhãn của config).
+
+**Khác plan (ghi để user biết):**
+- §6a / 6b gộp thành một ô Omni chạy sau UniAV (config đã khoá nên không cần tách).
+- §7: `benchmark_protocol.json` được ghi vào `results/` của lượt chạy, in sha256 và đẩy HF **trước** ô chấm; ô chấm kiểm sha256. Không commit
+  git trước khi chấm được vì chấm chạy ngay trong notebook; agent commit file này vào `configs/` sau khi có log. Lịch sử commit trên HF là bằng
+  chứng thứ tự thời gian.
+- Chấm một lần: ô 9 không chấm lại nếu đã có `results/score/criteria.json`; `run_manifest.json` đếm số lượt chấm. `SMOKE = True` có chấm thử trên
+  5 video (thư mục riêng, không đẩy HF), số đó vô nghĩa và không được dùng.
+- Luật mới, không dùng nhãn, ghi trong protocol: video không có đề xuất nào ≥ θ thì không có đoạn R6 / R3 (không truy hồi được ở hai dòng đó,
+  cột "video có vector" cho biết số video), R8 của nó chỉ gồm đoạn lấp. Lượt dev không gặp trường hợp này.
+- K2 và K6 "UEMR − R2" so cùng cột với phương pháp chính ((U) β\* trên R8 − (U) β\* trên R3 / R2); cặp cột (b) cũng được ghi trong `pairs.json`.
+- Phân tích nhóm (bước bị bỏ sót, đoạn lấp, C3) không chạy trên benchmark; hạng từng câu được lưu nên tính sau được mà không chấm lại.
+- Ô 9 cần ~25 GB RAM (ma trận điểm 11,6 nghìn câu × ~50 nghìn đoạn R8).

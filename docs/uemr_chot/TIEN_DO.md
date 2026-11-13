@@ -20,10 +20,11 @@ Nhật ký cuối file 01 và 02; số liệu cho báo cáo ở `SO_LIEU_DU_LIEU
 
 ## Việc tiếp theo (theo thứ tự)
 
-1. Nhánh B (user chạy, sau khi push): `notebooks/uemr/uemr_final_benchmark.ipynb` B1 / B2, bản sửa 2026-11-13 (`FUSHION_REF = 12c7775`: kho =
-   mọi video YouCook2 có mp4, ~1.500; annotation từ repo; đầu ra `/content` + HF `GraceFeel/uemr-bench-yc2`). Chưa có log. Gửi output ô 3, 4, 5, 6a, 7.
-2. Agent: file 03 §4–9 (UniAV + R2 / R3 / R6 / R8 trên YouCook2 theo `configs/uemr_final.json`, khoá protocol, chấm một lần). Notebook mới
-   phải ghi vào `/content` và đẩy HF, không ghi Drive (Drive của user gần đầy).
+1. Nhánh B (user chạy, sau khi push): `notebooks/uemr/uemr_final_benchmark.ipynb` B1 / B2, bản gộp 2026-11-13 (`FUSHION_REF = c7e020e`: kho =
+   mọi video YouCook2 có mp4, ~1.500; annotation từ repo; đầu ra `/content` + HF `GraceFeel/uemr-bench-yc2`; **cả pipeline + chấm một lần**).
+   Chưa có log. Gửi output ô 3 đến 10.
+2. Agent: đọc log, tải `results/` từ HF `GraceFeel/uemr-bench-yc2` (`yc2/results/`), ghi Nhật ký file 03, commit `benchmark_protocol.json` và
+   `results/uemr_final/bench/yc2/`.
 3. File 04: báo cáo.
 
 ## Lưu ý cho phiên sau
