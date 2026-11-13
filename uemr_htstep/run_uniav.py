@@ -149,6 +149,8 @@ def cmd_student(a, model, ds, uh) -> None:
         used.append(art)
         for n in a.names:
             segs = parts[n][v]
+            if not segs:      # benchmark: a video without any proposal above θ has no R6 / R3 segment
+                continue
             acc[n].append(uh.student_vectors(model, p, segs))
             ids[n] += [(v, s[0], s[1]) for s in segs]
         if i % 50 == 0:
