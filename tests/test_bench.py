@@ -13,6 +13,7 @@ DB = {"a": {"subset": "validation", "duration": 100.0, "annotations": [{"segment
 def test_funnel_and_overlap():
     b = bench.yc2(DB)
     assert sorted(b) == ["a", "b", "c"]
+    assert sorted(bench.yc2(DB, None)) == ["a", "b", "c", "t"]
     assert bench.overlap(b, uniav_train=["c", "x"], omni_train=["y"], dev=[]) == {"uniav_train": ["c"], "omni_train": [], "dev": []}
     keep, counts = bench.funnel(b, have_mp4=["a", "b", "c"], with_audio=["a", "b", "c"], readable=["a", "b", "c"], in_training=["c"])
     assert keep == ["a", "b"]

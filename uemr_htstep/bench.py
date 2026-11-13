@@ -14,8 +14,9 @@ from omni_retrieval.partitions_uemr import _round
 from .data import normalize
 
 
-def yc2(database: dict, subset: str = "validation") -> dict:
-    return {v: x for v, x in database.items() if x["subset"] == subset}
+def yc2(database: dict, subset: str | None = "validation") -> dict:
+    """``subset=None``: every annotated video (train + val); legal only because no model of the final plan trained on YouCook2."""
+    return {v: x for v, x in database.items() if subset is None or x["subset"] == subset}
 
 
 def overlap(videos, **id_sets) -> dict:
