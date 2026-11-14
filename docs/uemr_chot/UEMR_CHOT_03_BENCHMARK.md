@@ -180,3 +180,7 @@ trưng; ô 6 UniAV → đoạn → `h_i`; ô 7 khoá protocol; ô 8 Omni; ô 9 c
 - K2 và K6 "UEMR − R2" so cùng cột với phương pháp chính ((U) β\* trên R8 − (U) β\* trên R3 / R2); cặp cột (b) cũng được ghi trong `pairs.json`.
 - Phân tích nhóm (bước bị bỏ sót, đoạn lấp, C3) không chạy trên benchmark; hạng từng câu được lưu nên tính sau được mà không chấm lại.
 - Ô 9 cần ~25 GB RAM (ma trận điểm 11,6 nghìn câu × ~50 nghìn đoạn R8).
+- 2026-11-14, user yêu cầu: notebook chỉ tải dữ liệu YouCook2. Bỏ CHECK tái lập đặc trưng của §2 (trước đây trích lại 5 video HT-Step rồi so cos ≥ 0,99
+  với `nguyenminh04/htstep-feats-k400`). Vì vậy **không có bằng chứng** là script trích trên Colab cho ra đúng đặc trưng như lúc train UniAV;
+  `inventory.json` ghi `features.repro = "bỏ"`. Từ HT-Step chỉ còn những thứ thuộc về model: adapter Omni `best`, checkpoint UniAV,
+  `taxonomy.csv` + `step_emb_iv2j.npz` (head của UniAV) và danh sách ID train trong repo (để kiểm trùng).
