@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kiến trúc UEMR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Bố cục: các band xếp dọc, nối bằng mũi tên "bàn giao"; trong band, mỗi hàng đọc trái → phải. */
+:root {
+  --bg: #f5f6f8; --panel: #ffffff; --fg: #1b2230; --muted: #5d6676; --line: #d6dbe3;
+  --in: #4b55c4;     --in-bg: #eceefc;      /* đầu vào */
+  --frz: #b8650a;    --frz-bg: #fdf1e2;     /* model đóng băng */
+  --trn: #0f7b74;    --trn-bg: #e2f4f2;     /* model được train (UniAV) */
+  --rule: #7a3fb0;   --rule-bg: #f2eafa;    /* luật / hậu xử lý */
+  --ten: #b03a62;    --ten-bg: #fbe9ef;     /* tensor / chỉ mục */
+  --out: #2f7d32;    --out-bg: #e7f4e7;     /* đầu ra */
+  --ok: #2f7d32; --warn: #a76400; --todo: #7a8291;
+  --display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, "Courier New", monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161d; --panel: #1a2029; --fg: #e3e7ee; --muted: #9aa3b2; --line: #2e3643;
+  --in: #9aa2ff; --in-bg: #23284a; --frz: #f0a54a; --frz-bg: #3a2a14; --trn: #4fd1c5; --trn-bg: #12332f;
+  --rule: #c79bf2; --rule-bg: #2e2140; --ten: #f28fb0; --ten-bg: #3d1c29; --out: #7cd07f; --out-bg: #18321a;
+  --ok: #7cd07f; --warn: #f0b252; --todo: #8c95a5; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161d; --panel: #1a2029; --fg: #e3e7ee; --muted: #9aa3b2; --line: #2e3643;
+  --in: #9aa2ff; --in-bg: #23284a; --frz: #f0a54a; --frz-bg: #3a2a14; --trn: #4fd1c5; --trn-bg: #12332f;
+  --rule: #c79bf2; --rule-bg: #2e2140; --ten: #f28fb0; --ten-bg: #3d1c29; --out: #7cd07f; --out-bg: #18321a;
+  --ok: #7cd07f; --warn: #f0b252; --todo: #8c95a5; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--body); padding: 28px 16px 56px; }
+.wrap { max-width: 1240px; margin: 0 auto; }
+h1 { font: 700 30px/1.15 var(--display); margin: 0 0 6px; text-wrap: balance; }
+h2.sec { font: 700 21px/1.2 var(--display); margin: 34px 0 12px; }
+.lede { color: var(--muted); max-width: 80ch; margin: 0 0 16px; }
+code, .m { font-family: var(--mono); font-size: 12px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 14px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 13px; height: 13px; border-radius: 3px; border: 1.5px solid currentColor; display: inline-block; }
+.sw.d { border-style: dashed; }
+
+.notation { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin-bottom: 8px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 4px 20px; font-size: 12.5px; }
+.notation div { color: var(--muted); }
+.notation code { color: var(--fg); }
+
+.stage { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; display: grid; grid-template-columns: 170px 1fr; overflow: hidden; }
+.rail { padding: 16px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.rail .no { font: 700 12px var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.rail h3 { font: 700 17px/1.2 var(--display); margin: 0; text-wrap: balance; }
+.rail .d { font-size: 12px; color: var(--muted); }
+.rows { padding: 14px 16px; display: grid; gap: 12px; min-width: 0; }
+
+.row { display: flex; align-items: stretch; gap: 6px; min-width: 0; }
+.row > .node { flex: 1 1 0; }
+.arrow { flex: 0 0 18px; display: grid; place-items: center; color: var(--muted); font-size: 16px; }
+.node { border-radius: 8px; padding: 9px 11px; border: 1.5px solid; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.kind { font: 600 10.5px var(--body); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.node b { font: 600 13.5px/1.3 var(--body); }
+.io { font-family: var(--mono); font-size: 11.5px; line-height: 1.45; word-break: break-word; }
+.io i { font-family: var(--body); font-style: normal; color: var(--muted); font-size: 11.5px; }
+.node small, .src { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.src { font-family: var(--mono); font-size: 10.5px; word-break: break-word; }
+.k-in { border-color: var(--in); background: var(--in-bg); }
+.k-frz { border-color: var(--frz); background: var(--frz-bg); }
+.k-trn { border-color: var(--trn); background: var(--trn-bg); }
+.k-rule { border-color: var(--rule); background: var(--rule-bg); }
+.k-ten { border-color: var(--ten); background: var(--ten-bg); }
+.k-out { border-color: var(--out); background: var(--out-bg); }
+.unk { border-style: dashed; }
+.st { align-self: flex-start; font: 600 10.5px var(--body); padding: 1px 8px; border-radius: 99px; border: 1px solid currentColor; margin-top: 3px; }
+.st.ok { color: var(--ok); } .st.todo { color: var(--todo); border-style: dashed; }
+.warn { color: var(--warn); font-size: 12px; }
+.warn::before { content: "⚠ "; }
+.note { font-size: 12.5px; color: var(--muted); border-left: 3px solid var(--line); padding: 2px 0 2px 10px; max-width: 95ch; }
+.note b { color: var(--fg); }
+
+.handoff { display: flex; align-items: center; gap: 10px; padding: 8px 0 8px 70px; color: var(--muted); font-size: 12.5px; }
+.handoff .stem { flex: 0 0 2px; height: 30px; background: var(--line); position: relative; }
+.handoff .stem::after { content: ""; position: absolute; bottom: -1px; left: -5px; border: 6px solid transparent; border-top-color: var(--line); border-bottom: 0; }
+.handoff code { color: var(--fg); }
+
+.lanes { display: grid; gap: 10px; }
+.lane-t { font: 600 11px var(--body); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.merge { display: grid; grid-template-columns: 1fr 18px 1fr; gap: 6px; align-items: stretch; }
+
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 11px var(--body); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+tr.main td { background: var(--trn-bg); }
+.tablewrap { overflow-x: auto; }
+
+ul.srcs { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; }
+ul.srcs li { margin: 3px 0; }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; }
+
+@media (max-width: 760px) {
+  .stage { grid-template-columns: 1fr; }
+  .rail { border-right: 0; border-bottom: 1px solid var(--line); }
+  .row, .merge { flex-direction: column; display: flex; }
+  .row .arrow, .merge .arrow { transform: rotate(90deg); height: 18px; flex-basis: 18px; }
+  .handoff { padding-left: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Kiến trúc UEMR</h1>
+<p class="lede">UEMR (Unified Event-aware Multi-vector Retrieval) theo <code>docs/uemr_chot/UEMR_CHOT_00_TONG_QUAN.md</code> §2. Trang vẽ đường đi của dữ liệu,
+shape ở từng khối và tham số đã khoá trong <code>configs/uemr_final.json</code>. Mọi số đều có nguồn <code>file:dòng</code> ghi nhỏ dưới node.
+Code HanLi lấy ở commit <code>77fc4fa</code> (<code>libs/…</code>, <code>train.py</code>, <code>tools/…</code>); code Fushion ở nhánh <code>htstep</code>, commit <code>ed48a28</code>.
+Không có số kết quả trên trang này.</p>
+
+<div class="legend">
+  <span style="color:var(--in)"><i class="sw"></i>Đầu vào</span>
+  <span style="color:var(--frz)"><i class="sw"></i>Model đóng băng (Omni, InternVideo2, BEATs)</span>
+  <span style="color:var(--trn)"><i class="sw"></i>Model được train (UniAV)</span>
+  <span style="color:var(--rule)"><i class="sw"></i>Luật / hậu xử lý</span>
+  <span style="color:var(--ten)"><i class="sw"></i>Tensor / chỉ mục</span>
+  <span style="color:var(--out)"><i class="sw"></i>Đầu ra</span>
+  <span><i class="sw d"></i>Viền nét đứt = chưa rõ</span>
+  <span class="warn" style="font-size:12.5px">= code khác tài liệu 00</span>
+</div>
+
+<div class="notation">
+  <div><code>T_feat</code> = số giây của video = số dòng đặc trưng (1 dòng / giây)</div>
+  <div><code>T = 256</code> bước lưới của UniAV; <code>T_l = 256 / 2^l</code>, l = 0…5</div>
+  <div><code>P = 504</code> = Σ T_l, số điểm của cả pyramid</div>
+  <div><code>A = 617</code> article; <code>4958</code> bước trong taxonomy</div>
+  <div><code>C</code> = số bước của article đoán (thay đổi theo article)</div>
+  <div><code>K'</code> đề xuất sau soft-NMS; <code>K</code> đoạn R6; <code>F</code> đoạn lấp; <code>N = K + F</code> đoạn R8</div>
+  <div><code>Q</code> câu hỏi; <code>V</code> video trong kho</div>
+  <div><code>D_omni = 3584</code>: chiều vector Omni (<code>e_i</code>, <code>h_i</code>, <code>t</code>)</div>
+  <div>1 bước lưới = <code>T_feat / 256</code> giây; batch = 1 video khi suy luận</div>
+</div>
+
+<!-- ===================== A. Tổng quan ===================== -->
+<h2 class="sec">A. Tổng quan một lượt truy hồi</h2>
+<section class="stage">
+  <div class="rail"><span class="no">A</span><h3>Offline và online</h3><span class="d">Phía video chạy một lần cho cả kho. Phía câu hỏi chạy mỗi lần hỏi.</span></div>
+  <div class="rows lanes">
+    <span class="lane-t">Offline: phía video (mỗi video một lần)</span>
+    <div class="row">
+      <div class="node k-in"><span class="kind">Đầu vào</span><b>Video</b><span class="io">mp4 (hình + tiếng), duration</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-trn"><span class="kind">Model được train</span><b>UniAV</b><span class="io">đặc trưng → đề xuất đoạn + feat0</span><span class="src">mục B1–B7</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-rule"><span class="kind">Luật</span><b>Đoạn {S_i} = R8</b><span class="io">R6 (UniAV, θ) + đoạn lấp</span><span class="src">mục B7–B8</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-ten"><span class="kind">Tensor</span><b>e_i, h_i cho mỗi đoạn</b><span class="io">e_i: Omni best AV (3584)<br>h_i: span head UniAV (3584)</span><span class="src">mục B9</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-ten"><span class="kind">Chỉ mục</span><b>SegmentIndex</b><span class="io">{video, ts, te, e_i, h_i}, N đoạn / video</span></div>
+    </div>
+    <span class="lane-t">Online: phía câu hỏi</span>
+    <div class="row">
+      <div class="node k-in"><span class="kind">Đầu vào</span><b>Câu hỏi q</b><span class="io">text</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-frz"><span class="kind">Model đóng băng</span><b>Omni best, nhánh text</b><span class="io">ra: t (3584), L2</span><span class="src">mục C</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-rule"><span class="kind">Luật</span><b>Điểm đoạn s_i + MaxSim</b><span class="io">S(q, V) = max_i s_i</span><span class="src">mục D</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-out"><span class="kind">Đầu ra</span><b>Video xếp hạng + khoảnh khắc</b><span class="io">khoảnh khắc = đoạn argmax_i s_i của video</span></div>
+    </div>
+    <p class="note">Ở đây <b>chỉ UniAV được train</b> (chưng cất từ Omni best, mục E). Omni best, InternVideo2 và BEATs đều đóng băng. Hai vector
+    của một đoạn nằm trong cùng không gian Omni best: <code>e_i</code> do chính Omni tính, <code>h_i</code> do span head UniAV học bắt chước.</p>
+  </div>
+</section>
+
+<!-- ===================== B. Phía video ===================== -->
+<h2 class="sec">B. Phía video, chi tiết</h2>
+
+<section class="stage">
+  <div class="rail"><span class="no">B1</span><h3>Đầu vào</h3><span class="d">Một video của kho benchmark.</span></div>
+  <div class="rows">
+    <div class="row">
+      <div class="node k-in"><span class="kind">Đầu vào</span><b>mp4 + tiếng</b>
+        <span class="io"><i>ra:</i> file mp4 (khung hình, track tiếng), duration (giây)</span>
+        <small>Đặc trưng UniAV đọc mp4 gốc; Omni đọc bản decord đọc được (AV1 được chuyển sang H.264 không mất mát).</small>
+        <span class="src">notebooks/uemr/uemr_final_benchmark.ipynb ô 3 (localize)</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-rule"><span class="kind">Luật</span><b>Bọc theo định dạng HT-Step</b>
+        <span class="io"><i>vào:</i> {video: duration}<br><i>ra:</i> annotations.json: subset val_seen, 1 bước giữ chỗ [0, 1] s</span>
+        <small>Để <code>HTStepDataset</code> gốc (không sửa) nạp được đặc trưng. Ở chế độ article đoán, bước giữ chỗ không tới head nào.</small>
+        <span class="src">uemr_htstep/final_bench.py:29-35</span><span class="st ok">đã kiểm từ code</span></div>
+    </div>
+  </div>
+</section>
+<div class="handoff"><span class="stem"></span>bàn giao: mp4 → trích đặc trưng; annotation giữ chỗ → <code>HTStepDataset</code></div>
+
+<section class="stage">
+  <div class="rail"><span class="no">B2</span><h3>Trích đặc trưng</h3><span class="d">Mỗi giây một dòng hình và một dòng tiếng, rồi nội suy lên lưới 256 bước.</span></div>
+  <div class="rows">
+    <div class="row">
+      <div class="node k-frz"><span class="kind">Model đóng băng</span><b>InternVideo2-1B K400 f16</b>
+        <span class="io"><i>vào:</i> giây i → 16 khung ở 4 fps, thời điểm i−1,75 … i+2 s, 224×224 (ép khung)<br>
+        <i>ra:</i> k768 (T_feat, 768) fp16</span>
+        <small>vector trước bộ phân lớp K400 (<code>fc_norm(clip_projector)</code>)</small>
+        <span class="src">HanLi tools/pipeline/extract_features.py:17-18, 75, 86, 168-172, 223-227, 391</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="node k-frz"><span class="kind">Model đóng băng</span><b>BEATs (phần audio của audio_6b.pth)</b>
+        <span class="io"><i>vào:</i> giây i → 3 s tiếng [i−1, i+2), 16 kHz mono<br>
+        <i>ra:</i> a768 (T_feat, 768) fp16, toàn 0 nếu không có tiếng</span>
+        <span class="src">extract_features.py:24, 76, 239-247, 385-386</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-rule"><span class="kind">Luật</span><b>HTStepDataset.__getitem__</b>
+        <span class="io"><i>vào:</i> k768, a768 (T_feat, 768)<br>
+        <i>ra:</i> visual, audio (768, 256) fp32; feat_stride = T_feat·16/256</span>
+        <small>L2 từng dòng, nội suy tuyến tính lên T = 256. fps danh nghĩa 16, nên 1 bước = T_feat/256 giây.</small>
+        <span class="src">HanLi libs/datasets/helper.py:41-45 · libs/datasets/htstep.py:152-162 · libs/core/config.py:21-22</span><span class="st ok">đã kiểm từ code</span></div>
+    </div>
+  </div>
+</section>
+<div class="handoff"><span class="stem"></span>bàn giao: <code>V, A (1, 768, 256)</code> + mask <code>(1, 1, 256)</code></div>
+
+<section class="stage">
+  <div class="rail"><span class="no">B3</span><h3>Backbone + pyramid</h3><span class="d">Mỗi luồng hình / tiếng một nhánh, trao đổi qua cross-attention.</span></div>
+  <div class="rows">
+    <div class="row">
+      <div class="node k-trn"><span class="kind">Model được train</span><b>Embedding + stem</b>
+        <span class="io"><i>vào:</i> V, A (1, 768, 256)<br><i>ra:</i> x_V, x_A (1, 512, 256)</span>
+        <small>2 MaskedConv1D k=3 (768→512) + LN mỗi luồng, cộng position embedding sin, 2 self-attention block (n_head 4).</small>
+        <span class="src">HanLi libs/modeling/multimodal_backbones.py:46-94, 147-174 · config.py:34-41, 48</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-trn"><span class="kind">Model được train</span><b>Cross-attention V↔A, giảm ×2 năm lần</b>
+        <span class="io"><i>ra:</i> fV, fA: 6 mức (1, 512, T_l), T_l = 256, 128, 64, 32, 16, 8</span>
+        <small>mức 0: hình nhận query tiếng và ngược lại; mỗi mức sau: một block cross-attention stride 2.</small>
+        <span class="src">multimodal_backbones.py:96-130, 176-187 · event_archs.py:42 (fpn_strides [1, 2, 4, 8, 16, 32])</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-ten"><span class="kind">Tensor</span><b>feats</b>
+        <span class="io">6 mức (1, 1024, T_l) = concat(fV, fA)</span>
+        <small>Bước của mức l = 2^l bước lưới = 2^l·T_feat/256 giây.</small>
+        <span class="src">event_archs.py:58, 112-114</span><span class="st ok">đã kiểm từ code</span></div>
+    </div>
+  </div>
+</section>
+<div class="handoff"><span class="stem"></span>bàn giao: <code>feats</code> (6 mức) và <code>msk</code></div>
+
+<section class="stage">
+  <div class="rail"><span class="no">B4</span><h3>Đoán article</h3><span class="d">Không dùng article GT, để tránh rò rỉ.</span></div>
+  <div class="rows">
+    <div class="row">
+      <div class="node k-trn"><span class="kind">Model được train</span><b>article_head</b>
+        <span class="io"><i>vào:</i> feats[0] (1, 1024, 256) <b>trước</b> article_cond; vector article (617, 512) = trung bình text bước đã L2<br>
+        <i>ra:</i> art_logits (1, 617)</span>
+        <small>video: mean + max theo thời gian (2048) → MLP → 512; article: Linear 512→512 + vector học riêng (617, 512); cos × scale.</small>
+        <span class="src">HanLi heads.py:259-303 · event_archs.py:78-90, 117</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-rule"><span class="kind">Luật (adapter Fushion)</span><b>Hook: cand = bước của article top-1</b>
+        <span class="io"><i>vào:</i> art_logits<br><i>ra:</i> cand (C,), chỉ số dòng trong bảng 4958 bước</span>
+        <small>Forward hook trên article_head thay <code>cand</code> (mặc định là bước của article GT, lấy từ annotation) ngay trước khi forward dùng nó. Code model không sửa.</small>
+        <span class="src">uemr_htstep/uniav_htstep.py:55-62 · HanLi htstep.py:122 · event_archs.py:120</span><span class="st ok">đã kiểm từ code</span></div>
+    </div>
+    <p class="note"><b>Vì sao không dùng article GT:</b> <code>cand</code> GT là danh sách bước của chính công thức trong video, tức là một phần đáp án
+    của câu hỏi. Article head chỉ nhìn đặc trưng trước <code>article_cond</code>, nên nó không thấy text bước nào của video
+    (<span class="m">uniav_htstep.py:3-8</span>). Notebook benchmark ô 6 còn kiểm thêm: đổi bước giữ chỗ thì đề xuất và article đoán không đổi.</p>
+  </div>
+</section>
+<div class="handoff"><span class="stem"></span>bàn giao: text các bước của article đoán <code>pool_raw[cand] (1, C, 512)</code></div>
+
+<section class="stage">
+  <div class="rail"><span class="no">B5</span><h3>article_cond</h3><span class="d">Đặc trưng video attend vào text các bước của article.</span></div>
+  <div class="rows">
+    <div class="row">
+      <div class="node k-in"><span class="kind">Dữ liệu (đóng băng)</span><b>Text bước InternVideo2</b>
+        <span class="io">pool_raw (4958, 512), "&lt;activity&gt;: &lt;headline&gt;"</span>
+        <span class="src">HanLi config.py:14-15 · htstep.py:52-59</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-trn"><span class="kind">Model được train</span><b>ArticleCondition</b>
+        <span class="io"><i>vào:</i> feats (1, 1024, T_l) ×6; kv = LN(Linear 512→1024) + embedding thứ tự bước (1, C, 1024)<br>
+        <i>ra:</i> feats' (1, 1024, T_l) ×6 = f + MHA(LN(f), kv)·mask</span>
+        <small>MultiheadAttention 8 head, out_proj khởi tạo 0. Dùng chung cho mọi mức.</small>
+        <span class="src">HanLi heads.py:226-256 · event_archs.py:122-129</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-ten"><span class="kind">Tensor (hook Fushion)</span><b>feat0</b>
+        <span class="io">(1024, 256): mức 0 của feats', sau article_cond</span>
+        <small>Giữ lại để tính h_i cho đoạn bất kỳ (B9).</small>
+        <span class="src">uemr_htstep/uniav_htstep.py:63, 69</span><span class="st ok">đã kiểm từ code</span></div>
+    </div>
+  </div>
+</section>
+<div class="handoff"><span class="stem"></span>bàn giao: <code>feats'</code> (6 mức) cho các head; <code>feat0</code> cho span head</div>
+
+<section class="stage">
+  <div class="rail"><span class="no">B6</span><h3>Các head</h3><span class="d">Conv 3 lớp k=3 + LN trên mỗi mức, dùng chung qua các mức.</span></div>
+  <div class="rows">
+    <div class="row">
+      <div class="node k-trn"><span class="kind">Model được train</span><b>EventHead</b>
+        <span class="io"><i>ra:</i> ev (1, P) logit "có bước"</span>
+        <span class="src">HanLi heads.py:25-60 · event_archs.py:133</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="node k-trn"><span class="kind">Model được train</span><b>BoundaryHead</b>
+        <span class="io"><i>ra:</i> bd (1, P, 2) khoảng tới đầu / cuối, đơn vị stride của mức<br>qu (1, P) logit IoU-quality</span>
+        <span class="src">heads.py:306-342 · event_archs.py:136-138</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="node k-trn"><span class="kind">Model được train</span><b>EmbedHead (UEMR không dùng)</b>
+        <span class="io"><i>ra:</i> em (1, P, 512), omni_em (1, P, 3584) point head, raw0 (1, 512, 256)</span>
+        <small>Dùng cho nhãn bước và loss lúc train; UEMR không đọc các tensor này.</small>
+        <span class="src">heads.py:63-111 · event_archs.py:141-143</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="node k-trn"><span class="kind">Model được train</span><b>OmniSpanHead (span head)</b>
+        <span class="io"><i>vào:</i> feat0 (1024, 256) + đoạn (N, 2) đơn vị bước<br><i>ra:</i> (N, 3584) L2</span>
+        <small>Chạy ở B9 trên mọi đoạn R8.</small>
+        <span class="src">heads.py:177-200 · event_archs.py:74</span><span class="st ok">đã kiểm từ code</span></div>
+    </div>
+  </div>
+</section>
+<div class="handoff"><span class="stem"></span>bàn giao: <code>ev, bd, qu</code> + toạ độ điểm (t, stride) của pyramid</div>
+
+<section class="stage">
+  <div class="rail"><span class="no">B7</span><h3>Hậu xử lý → R6</h3><span class="d">Phần HanLi theo test_cfg, rồi phần Fushion theo uemr_final.json.</span></div>
+  <div class="rows">
+    <div class="row">
+      <div class="node k-rule"><span class="kind">Luật (HanLi, test_cfg)</span><b>Điểm + soft-NMS</b>
+        <span class="io"><i>vào:</i> ev, bd, qu (1, P)<br><i>ra:</i> segments (K', 2) giây, scores (K',)</span>
+        <small>score = σ(ev)^0.7·σ(qu)^0.3; giữ score &gt; 0,05 (không có thì giữ top-1); top 1000; đoạn = t ∓ bd·stride (bước);
+        bỏ đoạn dài ≤ 0,05 bước; soft-NMS không phân lớp (IoU 0,7, min 0,001, σ 0,75, tối đa 200).</small>
+        <span class="src">HanLi event_archs.py:315-338 · config.py:70-75</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-rule"><span class="kind">Luật (HanLi)</span><b>Lưới → giây</b>
+        <span class="io">giây = (bước·feat_stride + 0,5·feat_stride) / 16, kẹp vào [0, duration]</span>
+        <span class="src">event_archs.py:359-361 · uniav_htstep.py:78-80</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-rule"><span class="kind">Luật (Fushion)</span><b>postprocess_uemr</b>
+        <span class="io"><i>vào:</i> đề xuất {ts, te, conf}<br><i>ra:</i> R6 (K, 2) giây</span>
+        <small>conf ≥ θ = 0,402, tối đa 30 (không có thì giữ đề xuất conf cao nhất); gộp cặp tIoU &gt; 0,7 thành hợp;
+        đoạn &lt; 2 s nới thành 2 s quanh tâm; sắp theo thời gian; làm tròn 2 số lẻ, không vượt thời lượng mp4.</small>
+        <span class="src">uemr_htstep/postprocess.py:74-82 · partitions.py:22-25 · run_uniav.py:37-40 · configs/uemr_final.json:32-36</span><span class="st ok">đã kiểm từ code</span></div>
+    </div>
+    <p class="note"><b>test_cfg:</b> <code>model_best.pth.tar</code> chỉ chứa <code>epoch, state_dict, metrics</code> (HanLi <span class="m">train.py:157</span>).
+    <code>test_cfg</code> lấy từ <span class="m">config.py:70-81</span> mặc định ở 77fc4fa, qua <span class="m">uniav_htstep.py:28-36</span>.
+    <code>article_soft = False</code>: nhãn bước của đoạn chọn trong <code>cand</code>, nhưng UEMR chỉ dùng ts, te, conf.</p>
+  </div>
+</section>
+<div class="handoff"><span class="stem"></span>bàn giao: R6 <code>(K, 2)</code> giây, mỗi video</div>
+
+<section class="stage">
+  <div class="rail"><span class="no">B8</span><h3>Lấp chỗ trống → R8</h3><span class="d">Phần video không đoạn R6 nào phủ vẫn có vector.</span></div>
+  <div class="rows">
+    <div class="row">
+      <div class="node k-rule"><span class="kind">Luật (Fushion)</span><b>fill_gaps</b>
+        <span class="io"><i>vào:</i> R6 (K, 2), duration<br><i>ra:</i> F đoạn lấp</span>
+        <small>Mỗi khoảng không được phủ dài ≥ L_min = 5 s chia đều thành n = max(1, round(dài / L_fill)) cửa sổ, L_fill = 10 s.
+        Khoảng ngắn hơn 5 s bị bỏ.</small>
+        <span class="src">omni_retrieval/bo_sung.py:22-42 · configs/uemr_final.json:38-39</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-ten"><span class="kind">Tensor</span><b>R8</b>
+        <span class="io">(N, 2) giây, N = K + F, sắp theo thời gian, làm tròn 2 số lẻ</span>
+        <small>Video không có đề xuất nào: R8 chỉ gồm đoạn lấp.</small>
+        <span class="src">uemr_htstep/final_bench.py:38-53</span><span class="st ok">đã kiểm từ code</span></div>
+    </div>
+    <p class="note"><b>h_i của đoạn lấp:</b> cùng span head, cùng <code>feat0</code> (đã điều kiện theo article đoán), chỉ khác cửa sổ [ts, te].
+    Không có nhánh riêng nào cho đoạn lấp (<span class="m">run_uniav.py:146-155</span>).</p>
+  </div>
+</section>
+<div class="handoff"><span class="stem"></span>bàn giao: đoạn R8 <code>(N, 2)</code> + <code>feat0</code> + mp4</div>
+
+<section class="stage">
+  <div class="rail"><span class="no">B9</span><h3>Vector mỗi đoạn</h3><span class="d">Hai đường song song cho cùng N đoạn.</span></div>
+  <div class="rows">
+    <div class="row">
+      <div class="node k-rule"><span class="kind">Luật</span><b>Giây → bước</b>
+        <span class="io">bước = giây·16 / feat_stride − 0,5</span>
+        <span class="src">uemr_htstep/uniav_htstep.py:73-75, 86 · HanLi htstep.py:164</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-trn"><span class="kind">Model được train</span><b>OmniSpanHead</b>
+        <span class="io"><i>vào:</i> feat0 (1024, 256), đoạn (N, 2) bước<br>
+        <i>ra:</i> h_i (N, 3584) L2, lưu fp16</span>
+        <small>mask bước floor(ts)…ceil(te); AttentionPool 8 query → (8·1024) → LN → Linear 8192→4096 → GELU → Linear 4096→3584 → L2.</small>
+        <span class="src">HanLi heads.py:114-126, 141-200 · config.py:32-33 · uniav_htstep.py:84-89 · run_uniav.py:160</span><span class="st ok">đã kiểm từ code</span></div>
+    </div>
+    <div class="row">
+      <div class="node k-rule"><span class="kind">Luật (loader Omni-fix)</span><b>Cắt đoạn từ mp4</b>
+        <span class="io"><i>vào:</i> record {video, timestamps [ts, te]}<br>
+        <i>ra:</i> 8 khung + 8 s tiếng</span>
+        <small>8 khung linspace từ round(ts·fps) tới min(round(te·fps), n−1); 50176 px mỗi khung, giữ tỉ lệ. Tiếng cắt đúng [ts, te], 16 kHz,
+        rồi cắt giữa (đoạn &gt; 8 s) hoặc đệm 0 phía sau (đoạn &lt; 8 s) thành 8 s.</small>
+        <span class="src">omni_retrieval/encode.py:61-68 · third_party/omni_fix/qwenvl/data/data_qwen.py:476-487, 792-795, 807-814 · omniretriever/data/media.py:218-232</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-frz"><span class="kind">Model đóng băng</span><b>Omni best, encode_av</b>
+        <span class="io"><i>vào:</i> "&lt;video&gt; Please describe the video." + khung + tiếng (BEATs bật), batch 1<br>
+        <i>ra:</i> e_i (3584) L2, lưu fp32</span>
+        <small>WAVE-7B (Qwen2.5-Omni thinker) + LoRA best (sha256 5e9899aa…), lấy <code>mllm_embeds</code> của head all-layer.</small>
+        <span class="src">encode.py:108-141, 290-336 · configs/uemr_final.json:15-23</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="node k-frz unk"><span class="kind">Model đóng băng · bên trong</span><b>Head all-layer fusion</b>
+        <span class="io">bên trong head: ?</span>
+        <small>Chưa đọc code model trong <code>third_party/omni_fix/qwenvl/model</code>. Chiều ra 3584 suy từ phép nhân <code>t @ e_iᵀ</code> và <code>t @ h_iᵀ</code> (final_bench.py:112).</small>
+        <span class="st todo">chưa rõ</span></div>
+    </div>
+    <div class="row">
+      <div class="node k-ten"><span class="kind">Chỉ mục</span><b>SegmentIndex + h_i cùng thứ tự</b>
+        <span class="io">e (N_kho, 3584), h (N_kho, 3584) fp32, L2 lại; video, ts, te mỗi dòng</span>
+        <small>Đoạn nào thiếu e_i bị bỏ khỏi <b>mọi</b> cột của dòng đó, kể cả cột chỉ dùng h_i.</small>
+        <span class="src">uemr_htstep/final_dev.py:153-174 · metrics.py:73-76</span><span class="st ok">đã kiểm từ code</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== C. Phía câu hỏi ===================== -->
+<h2 class="sec">C. Phía câu hỏi</h2>
+<section class="stage">
+  <div class="rail"><span class="no">C</span><h3>Mã hoá câu hỏi</h3><span class="d">Chạy online, một lần mỗi câu.</span></div>
+  <div class="rows">
+    <div class="row">
+      <div class="node k-in"><span class="kind">Đầu vào</span><b>Câu hỏi</b>
+        <span class="io">text: câu mô tả của bước GT, nguyên văn</span>
+        <span class="src">configs/uemr_final.json:49</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-frz"><span class="kind">Model đóng băng</span><b>Omni best, nhánh text (label branch)</b>
+        <span class="io"><i>vào:</i> tokenizer(text + "&lt;|im_end|&gt;")<br><i>ra:</i> hidden lớp cuối, token cuối</span>
+        <small>thinker.model, không padding (gom batch theo độ dài token).</small>
+        <span class="src">omni_retrieval/encode.py:14-21, 183-212</span><span class="st ok">đã kiểm từ code</span>
+        <span class="warn">tài liệu 00 §2 gọi là <code>encode_text</code>; code cố ý không dùng <code>OmniRetriever.encode_text</code> (đi qua classify_linear, khác không gian), mà dùng nhánh label như lúc eval.</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-ten"><span class="kind">Tensor</span><b>t</b>
+        <span class="io">(Q, 3584), L2; lưu fp16, đọc lên fp32</span>
+        <span class="src">encode.py:209 · omni_retrieval/collect.py:57 · evaluate.py:43-48</span><span class="st ok">đã kiểm từ code</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== D. Chấm điểm ===================== -->
+<h2 class="sec">D. Chấm điểm và 4 biến thể</h2>
+<section class="stage">
+  <div class="rail"><span class="no">D</span><h3>Điểm đoạn → MaxSim</h3><span class="d">Mọi biến thể dùng chung đoạn R8 và MaxSim; chỉ khác điểm s_i.</span></div>
+  <div class="rows">
+    <div class="row">
+      <div class="node k-ten"><span class="kind">Tensor</span><b>Ma trận cos</b>
+        <span class="io">sb = t·eᵀ (Q, N_kho)<br>ss = t·hᵀ (Q, N_kho)</span>
+        <span class="src">uemr_htstep/final_bench.py:112</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-rule"><span class="kind">Luật</span><b>Điểm đoạn s_i theo biến thể</b>
+        <span class="io">bảng bên dưới</span>
+        <span class="src">final_bench.py:113-120 · bo_sung.py:19-28</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-rule"><span class="kind">Luật</span><b>MaxSim</b>
+        <span class="io">S(q, V) = max_{i ∈ V} s_i → (Q, V)<br>khoảnh khắc = đoạn argmax_i</span>
+        <span class="src">uemr_htstep/metrics.py:27-44, 100-133 · configs/uemr_final.json:41</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-out"><span class="kind">Đầu ra</span><b>Xếp hạng video + đoạn trả về</b>
+        <span class="io">hạng mỗi câu (Q,), (ts, te) của đoạn argmax</span>
+        <span class="src">metrics.py:121-133</span><span class="st ok">đã kiểm từ code</span></div>
+    </div>
+
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th>Biến thể</th><th>Cột</th><th>Điểm đoạn s_i</th><th>Omni 7B phía video?</th><th>Nguồn</th></tr></thead>
+      <tbody>
+        <tr><td>UEMR-Omni</td><td>(b)</td><td><code>cos(t, e_i)</code></td><td>có, mọi đoạn R8</td><td class="src">final_bench.py:113</td></tr>
+        <tr><td>UEMR-Lite</td><td>(S)</td><td><code>cos(t, h_i)</code></td><td>không (Omni chỉ mã hoá câu hỏi)</td><td class="src">final_bench.py:114</td></tr>
+        <tr class="main"><td><b>UEMR-Full ★ chính</b></td><td>(U)</td><td><code>cos(t, e_i) + β*·cos(t, h_i)</code>, β* = 1,0</td><td>có, mọi đoạn R8</td><td class="src">final_bench.py:115 · uemr_final.json:40, 51, 55</td></tr>
+        <tr><td>UEMR-Hybrid</td><td>C1</td><td>đoạn R6: <code>Z_b(cos(t, e_i))</code>; đoạn lấp: <code>Z_S(cos(t, h_i))</code></td><td>tài liệu 00: chỉ đoạn R6 <span class="warn">xem dưới</span></td><td class="src">final_bench.py:116-120 · bo_sung.py:25-28</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note"><b>z-score Z(·), không dùng nhãn:</b> <code>Z_X(s) = (s − μ_X) / σ_X</code>, với μ, σ là trung bình và độ lệch chuẩn của cos trên
+    <b>mọi cặp</b> (câu của kho, đoạn R8 của kho), tính lại trên từng kho (<span class="m">bo_sung.py:19-22</span>, <span class="m">uemr_final.json:46</span>).
+    Đoạn lấp = đoạn R8 không trùng khoá với đoạn R6 nào (<span class="m">final_bench.py:117-118</span>).</p>
+    <p class="warn">Hybrid: tài liệu 00 §2 ghi Omni 7B chỉ chạy trên đoạn R6. Code chấm vẫn tính <code>sb</code> trên mọi đoạn R8, và μ_b, σ_b lấy trên mọi cặp (câu, đoạn R8),
+    kể cả e_i của đoạn lấp (<span class="m">final_bench.py:112, 119</span>). Nếu triển khai thật chỉ chạy Omni trên R6 thì không tính được đúng μ_b, σ_b này.</p>
+  </div>
+</section>
+
+<!-- ===================== E. Train ===================== -->
+<h2 class="sec">E. Train UniAV (chưng cất từ Omni best)</h2>
+<section class="stage">
+  <div class="rail"><span class="no">E</span><h3>Chưng cất</h3><span class="d">Chạy một lần trên HT-Step train (file 01). Omni best là thầy, đóng băng.</span></div>
+  <div class="rows">
+    <div class="row">
+      <div class="node k-in"><span class="kind">Đầu vào</span><b>Đoạn GT của HT-Step train</b>
+        <span class="io">mỗi video: annotation [ts, te], step id</span>
+        <span class="src">uemr_htstep/teacher_best.py:30-35</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-frz"><span class="kind">Model đóng băng (thầy)</span><b>Omni best encode_av</b>
+        <span class="io"><i>vào:</i> clip cắt sẵn, hoặc mp4 + timestamps = đoạn GT<br><i>ra:</i> emb (k, 3584) fp16, seg_idx (k,)</span>
+        <small>Cùng encoder với e_i ở B9 khi nguồn là mp4.</small>
+        <span class="src">teacher_best.py:1-12, 41-75 · omni_retrieval/encode.py</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="node k-frz unk"><span class="kind">Model đóng băng · tiền xử lý</span><b>Record "clip" cắt sẵn</b>
+        <span class="io">khung / tiếng của clip: ?</span>
+        <small>Xử lý trong Omni-fix <code>ab772eb training/</code> (qua <code>OMNI_QWENVL_DIR</code>), bản này không có trong repo nên chưa đọc.</small>
+        <span class="src">omni_retrieval/encode.py:47-49</span><span class="st todo">chưa rõ</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-ten"><span class="kind">Tensor (dataset HanLi)</span><b>Vector thầy theo slot</b>
+        <span class="io">omni_seg (48, 3584) L2, omni_ok (48,)</span>
+        <small>Đoạn không có vector thầy bị loại khỏi cả hai loss chưng cất.</small>
+        <span class="src">HanLi helper.py:17-38 · htstep.py:193-202</span><span class="st ok">đã kiểm từ code</span></div>
+    </div>
+    <div class="row">
+      <div class="node k-trn"><span class="kind">Model được train (HanLi, không sửa)</span><b>UniAV forward lúc train</b>
+        <span class="io"><i>vào:</i> đặc trưng như B2, crop ngẫu nhiên 90–100 %; <b>cand = article GT</b><br>
+        <i>ra:</i> ev, bd, qu, em, omni_em, art_logits, feat0</span>
+        <span class="src">HanLi htstep.py:122, 176-178 · config.py:23-24 · event_archs.py:102-150</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-rule"><span class="kind">Loss (HanLi)</span><b>Tổng loss</b>
+        <span class="io">event focal + 1,0·DIoU + 1,0·IoU-BCE + 0,2·InfoNCE điểm + 0,2·InfoNCE span + 0,5·CE article<br>
+        + chưng cất (point head và span head): 0,2·KL + 2,0·(1 − cos)</span>
+        <small>KL: phân bố tương đồng tới mọi vector thầy trong batch, nhiệt độ 0,05. Span head nhận đoạn GT (đơn vị bước) trên feat0.</small>
+        <span class="src">HanLi event_archs.py:153-281 · losses.py:110-137 · config.py:51-69</span><span class="st ok">đã kiểm từ code</span></div>
+      <div class="arrow">→</div>
+      <div class="node k-out"><span class="kind">Đầu ra</span><b>Checkpoint UniAV</b>
+        <span class="io">model_best.pth.tar = state_dict của EMA (0,999), lưu khi mAP val tăng; sha256 9447de87…</span>
+        <span class="src">HanLi train.py:127, 156-158 · config.py:86 · configs/uemr_final.json:7-9</span><span class="st ok">đã kiểm từ code</span></div>
+    </div>
+    <p class="note"><b>HanLi giữ nguyên:</b> toàn bộ model (<code>libs/modeling</code>), dataset, loss, <code>train.py</code>, <code>test_cfg</code>.
+    <b>Phần của Fushion:</b> dựng bộ vector thầy (<code>teacher_best.py</code>), hook article đoán và tính h_i (<code>uniav_htstep.py</code>,
+    <code>run_uniav.py</code>), hậu xử lý R6/R8 (<code>postprocess.py</code>, <code>partitions.py</code>, <code>bo_sung.fill_gaps</code>), encode Omni và chấm
+    (<code>omni_retrieval/encode.py</code>, <code>final_bench.py</code>, <code>metrics.py</code>).</p>
+    <p class="note"><b>Khác nhau giữa train và suy luận:</b> lúc train, span head đọc feat0 điều kiện theo <b>article GT</b> và chỉ thấy <b>đoạn GT</b>
+    (<span class="m">htstep.py:122</span>, <span class="m">event_archs.py:272-280</span>). Lúc chạy UEMR, nó đọc feat0 điều kiện theo <b>article đoán</b>
+    và chạy trên đoạn R6 cùng đoạn lấp.</p>
+  </div>
+</section>
+
+<!-- ===================== Nguồn ===================== -->
+<h2 class="sec">Nguồn và chỗ chưa rõ</h2>
+<div class="box">
+  <b>Code HanLi-Retriever (repo <code>UniAV-fixed</code>, commit <code>77fc4fa</code>)</b>
+  <ul class="srcs">
+    <li><code>libs/core/config.py</code>:14-26 (dataset), 31-50 (model), 51-69 (loss), 70-81 (test_cfg), 86 (EMA)</li>
+    <li><code>libs/datasets/htstep.py</code>:52-67 (taxonomy, article), 122-123 (cand GT), 152-164 (đặc trưng, lưới, giây → bước), 176-178 (crop), 193-204 (vector thầy, cand)</li>
+    <li><code>libs/datasets/helper.py</code>:17-38 (load_omni_segments), 41-45 (load_normalize)</li>
+    <li><code>libs/modeling/multimodal_backbones.py</code>:46-130 (khối), 141-187 (forward)</li>
+    <li><code>libs/modeling/event_archs.py</code>:42, 58-74 (cấu trúc), 78-90 (vector article), 102-151 (forward), 153-281 (loss), 298-371 (inference)</li>
+    <li><code>libs/modeling/heads.py</code>:25-60 (event), 63-111 (embed), 114-138 (mask đoạn), 141-200 (AttentionPool, OmniSpanHead), 226-256 (ArticleCondition), 259-303 (ArticleHead), 306-342 (boundary)</li>
+    <li><code>libs/modeling/losses.py</code>:110-137 (omni_distill_loss)</li>
+    <li><code>train.py</code>:106, 127-129, 140-161</li>
+    <li><code>tools/pipeline/extract_features.py</code>:17-24, 75-76, 86, 156-172, 223-247, 385-391</li>
+  </ul>
+  <b style="display:block;margin-top:10px">Code Fushion (nhánh <code>htstep</code>, <code>ed48a28</code>)</b>
+  <ul class="srcs">
+    <li><code>uemr_htstep/uniav_htstep.py</code>:1-12, 24-39, 42-70, 73-89</li>
+    <li><code>uemr_htstep/run_uniav.py</code>:37-40, 137-163</li>
+    <li><code>uemr_htstep/postprocess.py</code>:74-82 · <code>uemr_htstep/partitions.py</code>:22-25, 42-58</li>
+    <li><code>omni_retrieval/bo_sung.py</code>:22-42 (uncovered, fill_gaps) · <code>omni_retrieval/partitions_uemr.py</code>:82-84 (_round)</li>
+    <li><code>uemr_htstep/final_bench.py</code>:29-35, 38-53, 90-121 · <code>uemr_htstep/bo_sung.py</code>:19-28 · <code>uemr_htstep/final_dev.py</code>:153-174</li>
+    <li><code>uemr_htstep/metrics.py</code>:27-44, 73-76, 100-133 · <code>uemr_htstep/teacher_best.py</code>:1-12, 30-75</li>
+    <li><code>omni_retrieval/encode.py</code>:14-21, 47-49, 61-68, 108-141, 183-212, 252-260, 290-336 · <code>omni_retrieval/collect.py</code>:57 · <code>omni_retrieval/evaluate.py</code>:43-48 · <code>omni_retrieval/manifest.py</code>:127-135</li>
+    <li><code>third_party/omni_fix/qwenvl/data/data_qwen.py</code>:460-498, 771-818 · <code>third_party/omni_fix/omniretriever/data/media.py</code>:218-232</li>
+    <li><code>configs/uemr_final.json</code>:7-9, 15-23, 32-42, 46, 49, 51-56 · <code>notebooks/uemr/uemr_final_benchmark.ipynb</code> ô 3, ô 6</li>
+  </ul>
+
+  <b style="display:block;margin-top:10px">Node chưa rõ</b>
+  <ul class="srcs">
+    <li><b>Head all-layer fusion của Omni (B9):</b> chưa đọc cấu trúc bên trong. Chiều ra 3584 suy từ phép nhân trong code chấm. Cần làm: đọc
+      <code>third_party/omni_fix/qwenvl/model/qwen2_5_omni/modeling_qwen2_5_omni.py</code>, chỗ tạo <code>mllm_embeds</code> khi <code>classify_type="all_layer"</code>.</li>
+    <li><b>Record "clip" cắt sẵn cho vector thầy (E):</b> cách lấy khung và tiếng của clip nằm ở Omni-fix <code>ab772eb</code> nhánh <code>htstep_lora</code>, thư mục
+      <code>training/</code>, không có trong repo. Cần làm: clone commit đó, đọc nhánh <code>clip</code> của <code>data_qwen.py</code>, so với record mp4 + timestamps.</li>
+    <li><b>C (số bước của một article):</b> thay đổi theo article; code chỉ có chú thích "~8" (<span class="m">htstep.py:204</span>). Cần làm: đếm từ
+      <code>taxonomy.csv</code> nếu cần min / max.</li>
+  </ul>
+
+  <b style="display:block;margin-top:10px">Chỗ code lệch tài liệu 00</b>
+  <ul class="srcs">
+    <li><span class="warn">Vector câu hỏi:</span> tài liệu 00 §2 viết <code>t</code> = Omni best <code>encode_text</code>. Code dùng nhánh label (token cuối, lớp cuối của thinker.model)
+      và ghi rõ không dùng <code>OmniRetriever.encode_text</code> (<span class="m">encode.py:18-21</span>).</li>
+    <li><span class="warn">UEMR-Hybrid:</span> tài liệu 00 §2 ghi chỉ chạy Omni 7B trên đoạn R6. Code chấm cần e_i của mọi đoạn R8 để tính μ_b, σ_b (<span class="m">final_bench.py:112, 119</span>).</li>
+    <li><span class="warn">fp16:</span> tài liệu 00 §3.5 và <span class="m">uemr_final.json:42</span> ghi vector fp16. h_i và t lưu fp16 (<span class="m">run_uniav.py:160</span>,
+      <span class="m">collect.py:57</span>), nhưng e_i của benchmark đọc thẳng từ store encode fp32 (<span class="m">encode.py:260</span>, <span class="m">final_dev.py:160-162</span>). Mọi tích vô hướng tính ở fp32.</li>
+  </ul>
+</div>
+
+</div>
+</body>
+</html>
