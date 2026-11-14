@@ -25,7 +25,8 @@ Nhật ký cuối file 01 và 02; số liệu cho báo cáo ở `SO_LIEU_DU_LIEU
    Chưa có log. Gửi output ô 3 đến 10.
 2. Agent: đọc log, tải `results/` từ HF `GraceFeel/uemr-bench-yc2` (`yc2/results/`), ghi Nhật ký file 03, commit `benchmark_protocol.json` và
    `results/uemr_final/bench/yc2/`.
-3. File 04: báo cáo.
+3. File 04: bản chưa có benchmark đã viết 2026-11-14 ở `D:/Học/KL/Result/uemr_final/KET_QUA_UEMR.md`. Khi có benchmark: điền mục 7, câu
+   kết luận ở mục 1, ý 2 của mục 10 (K4 / K5), sha256 protocol ở mục 12, ví dụ định tính ở mục 9.
 
 ## Lưu ý cho phiên sau
 

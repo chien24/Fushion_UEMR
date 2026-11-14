@@ -32,3 +32,17 @@ File: `Result/uemr_final/KET_QUA_UEMR.md`. Văn phong như báo cáo HT-Step lư
     - Không có Context Fusion, cắt ngẫu nhiên / K-Medoids, nhiễu ranh giới, vai trò âm thanh (để làm sau).
     - (Nếu có) bộ benchmark khác miền: UniAV và `best` chỉ học nấu ăn.
 12. **Tái lập:** commit của các repo, sha256 checkpoint, config, protocol, file kết quả; ô notebook của từng bảng.
+
+## Nhật ký
+
+### 2026-11-14 (agent, local): bản chưa có benchmark
+
+User yêu cầu viết báo cáo trước, bổ sung benchmark sau. File `D:/Học/KL/Result/uemr_final/KET_QUA_UEMR.md` (thư mục `Result/` không nằm trong
+git). Mục 1–6, 8, 10–12 viết từ `results/uemr_final/` và Nhật ký file 01–03. Còn để trống, điền khi có lượt benchmark thật:
+- mục 1: câu kết luận theo bảng file 03 §8;
+- mục 7: kiểm kê, chất lượng cắt, bảng chính, K1–K6;
+- mục 9: ví dụ định tính (cần khung hình; chọn cùng lúc với benchmark);
+- mục 10 ý 2: chưa viết "có hiệu quả" (cần K4 hoặc K5 đạt);
+- mục 12: sha256 `benchmark_protocol.json`.
+
+Chi phí (mục 8): kích thước chỉ mục và thời gian Omni / video tự tính từ `cost.json`, giả định `h_i` lưu fp16. Tốc độ trích đặc trưng chưa đo.
