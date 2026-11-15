@@ -220,3 +220,17 @@ Chạy lại phương án B (2026-11-15): ô 6 dừng ở CHECK "đổi bước 
 được tính trên L4, còn 5 video kiểm tra chạy trên GPU của phiên mới (0,79 so với 0,42 s/video; sha `47f95591…` khác `fd8e1d92…` của lượt trước).
 Float khác GPU thì lệch, nên phép so `==` không còn đúng. Sửa: chạy cả bước giữ chỗ 0 và −1 trên cùng GPU rồi so với nhau (đúng ý CHECK).
 So sánh với `RAW` chỉ in ra để xem. `RAW` và bộ đoạn không đổi.
+
+### 2026-11-15 (2): kết quả chấm lại phương án B (agent đọc log `notebooks/uemr/log/uemr_final_benchmark _smoke_false.pdf`, bản 21:20)
+
+A100-SXM4-40GB, `"smoke": false`, mọi CHECK OK. Kho 635 video (sha `199ccfb2…`), 4.967 câu (sha `38763693…`), protocol
+`8b00211b07859f9ef45d7d3d4435adefe173045b50dcc51435d9009bf9287b5d` (ô 9 CHECK khớp). Clip Omni lỗi 0. CHECK bước giữ chỗ (cùng GPU) OK; so
+với RAW (L4): article đoán trùng 5/5, số đề xuất trùng 5/5, pred trùng tuyệt đối 0/5 (float khác GPU). `run_manifest`: 2 lượt chấm (lượt 1
+lệch câu hỏi, đã cất).
+
+Multi-positive, R@1, hiệu [CI 95 %]: K1 +7,45 [+6,12; +8,79] đạt; K2 +4,77 [+3,55; +6,02] đạt; K3 +2,60 [+1,85; +3,31] đạt; K4 +1,21
+[+0,08; +2,37] đạt; K5 −3,14 [−4,14; −2,13] **không đạt**. K6: UEMR R8 − R2 +0,18 [−0,69; +1,04]; C1 R8 − R6 (b) +0,26 [−0,46; +0,95];
+R7 − UEMR R8 +3,66 [+2,60; +4,79]; pt − best R0 (b) +0,60 [−0,35; +1,48]; pt − best R8 (b) +0,08 [−1,33; +1,60].
+Kết luận theo §8 (K1 và K2 đạt): "UEMR có tác dụng zero-shot trên YouCook2, cả so với một vector lẫn so với cắt đều".
+Bảng R@1 tuyệt đối của từng dòng × cột chỉ có trong `results/score/metrics.json` trên HF (log in dạng widget); token HF ở local không
+đọc được repo private nên chưa tải về `results/uemr_final/bench/yc2/`.
