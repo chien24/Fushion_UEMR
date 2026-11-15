@@ -215,3 +215,8 @@ lọc kho **và** câu hỏi, CHECK mọi câu có video gốc trong kho; cất 
 user biết):** đây là lần chấm thứ hai trên YouCook2. Lý do là sửa lỗi lệch câu hỏi với kho, không đổi tham số nào (θ, L_min, L_fill, β\*,
 phương pháp chính vẫn từ `configs/uemr_final.json` đã khoá). Số của lần chấm lệch đã được nhìn thấy trước khi chấm lại. Kho chỉ 635 / 1.500 video
 (chọn theo tên ID, không theo nhãn) là giới hạn phải ghi trong báo cáo. `run_manifest` sẽ đếm 2 lượt chấm.
+
+Chạy lại phương án B (2026-11-15): ô 6 dừng ở CHECK "đổi bước giữ chỗ" vì `RAW` (635 video, sha `5570f1f8…`, trùng lượt trước) lấy từ HF,
+được tính trên L4, còn 5 video kiểm tra chạy trên GPU của phiên mới (0,79 so với 0,42 s/video; sha `47f95591…` khác `fd8e1d92…` của lượt trước).
+Float khác GPU thì lệch, nên phép so `==` không còn đúng. Sửa: chạy cả bước giữ chỗ 0 và −1 trên cùng GPU rồi so với nhau (đúng ý CHECK).
+So sánh với `RAW` chỉ in ra để xem. `RAW` và bộ đoạn không đổi.
