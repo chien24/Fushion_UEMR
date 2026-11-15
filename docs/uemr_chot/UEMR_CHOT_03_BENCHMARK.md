@@ -184,3 +184,34 @@ trưng; ô 6 UniAV → đoạn → `h_i`; ô 7 khoá protocol; ô 8 Omni; ô 9 c
   với `nguyenminh04/htstep-feats-k400`). Vì vậy **không có bằng chứng** là script trích trên Colab cho ra đúng đặc trưng như lúc train UniAV;
   `inventory.json` ghi `features.repro = "bỏ"`. Từ HT-Step chỉ còn những thứ thuộc về model: adapter Omni `best`, checkpoint UniAV,
   `taxonomy.csv` + `step_emb_iv2j.npz` (head của UniAV) và danh sách ID train trong repo (để kiểm trùng).
+
+### 2026-11-15 (user chạy Colab B2, agent đọc log `notebooks/uemr/log/uemr_final_benchmark _smoke_false.pdf`)
+
+**Chạy trên:** NVIDIA L4 22 GB (không phải A100). Mọi CHECK in ra đều OK: unit test 33 pass, sha256 adapter `best` / pt, annotation repo =
+bản chính thức (1.790 video), sha256 `configs/uemr_final.json` = `c9840ffb…`, sha256 checkpoint UniAV `9447de87…`, taxonomy, đổi bước giữ chỗ
+không đổi kết quả (5 video), encode `best` và pt 0 clip lỗi.
+
+**Kiểm kê (ô 3):** annotation 1.790 → có mp4 1.500 → có tiếng 1.500 → decord đọc được 1.500 → không trùng train / dev 1.500; codec h264
+1.500; trùng YouTube ID với UniAV train / Omni train / dev 510: 0 / 0 / 0. Câu hỏi (ô 4): 11.590 (bỏ 4 bước không còn cửa sổ trong mp4).
+
+**Notebook đã bị sửa trên Colab (không có trong repo):** ô 5 (trích đặc trưng) bị comment sau khi dừng giữa chừng; thêm một ô "5b" thu kho về
+video đã có đặc trưng: **635 / 1.500** (thứ tự trích theo tên ID); trước ô 6 xoá `uniav_raw.jsonl`, `segments/`, `student/` để làm lại; trước
+ô 7 xoá `benchmark_protocol.json` cũ (kèm CHECK chưa từng chấm) rồi khoá lại, sha256 `ed366b9b11fc6c6e…`.
+
+**Lỗi của lượt này:** ô 5b đó thu kho nhưng **không lọc câu hỏi**. Câu hỏi vẫn là 11.590 câu của cả 1.500 video (`queries_sha256`
+`3131672b…` như trước khi thu kho), nên khoảng 57 % câu không có video gốc trong kho. Dấu hiệu: MedR = 636 = N + 1 ở mọi dòng, kể cả R7. Ô 9 đã
+chấm (`run_manifest`: 1 lượt chấm) với các số sau, **không dùng làm kết quả**, chỉ ghi để minh bạch: K1 UEMR R8 − R0 (b) +3,25 [+2,65, +3,85];
+K2 +2,00 [+1,42, +2,54]; K3 +1,15 [+0,84, +1,48]; K4 +0,57 [+0,05, +1,04]; K5 (U) − (b) R8 −1,34 [−1,77, −0,88]; R@1 cao nhất 9,44 (multi).
+
+Số khác của lượt (đúng, không phụ thuộc câu hỏi): UniAV 635 video 0,19 s/video, không video nào thiếu đoạn R6; θ 0,402; L của R2 11,3 s; số
+đoạn R0 635, R2 18.077, R3 3.523, R6 3.523, R8 18.072, R7 4.967; Omni `best` 45.192 clip (mới 4.315), pt 18.707 clip, 0,40 s/clip trên L4.
+Chất lượng cắt (chỉ mô tả, tính trên GT của 635 video): recall tIoU 0,3 / 0,5 / 0,7 = 37,99 / 24,86 / 13,67; độ phủ R6 27,80 %, R8 98,65 %;
+K_pred 5,55, K_GT 7,82 đoạn / video; 199 article đoán khác nhau.
+
+**Quyết định của user (2026-11-15): phương án B**, vì phải nộp báo cáo trong ngày: giữ kho 635 video, **lọc câu hỏi về đúng 635 video đó**,
+khoá lại protocol rồi chấm. Notebook (commit này): `RUN_FEATS = False`, `SMOKE = False`; ô 5 không còn CHECK "mọi video có đặc trưng"; ô 5b mới
+lọc kho **và** câu hỏi, CHECK mọi câu có video gốc trong kho; cất lần chấm lệch sang `results/score_lan1_cau_hoi_lech/` +
+`benchmark_protocol_lan1_cau_hoi_lech.json` (xoá khỏi đường chính trên HF để resume không đọc nhầm), ghi `inventory.rescore`. **Khác plan (ghi để
+user biết):** đây là lần chấm thứ hai trên YouCook2. Lý do là sửa lỗi lệch câu hỏi với kho, không đổi tham số nào (θ, L_min, L_fill, β\*,
+phương pháp chính vẫn từ `configs/uemr_final.json` đã khoá). Số của lần chấm lệch đã được nhìn thấy trước khi chấm lại. Kho chỉ 635 / 1.500 video
+(chọn theo tên ID, không theo nhãn) là giới hạn phải ghi trong báo cáo. `run_manifest` sẽ đếm 2 lượt chấm.
