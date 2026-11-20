@@ -1,6 +1,6 @@
 # UEMR chốt: tiến độ (để phiên sau làm tiếp)
 
-Cập nhật 2026-11-13. Nhánh `htstep` của Fushion; xem `git log` cho commit mới nhất (chưa push). Chi tiết từng bước nằm ở
+Cập nhật 2026-11-20. Nhánh `htstep` của Fushion; xem `git log` cho commit mới nhất (chưa push). Chi tiết từng bước nằm ở
 Nhật ký cuối file 01 và 02; số liệu cho báo cáo ở `SO_LIEU_DU_LIEU.md`; thứ tự chạy ở `HUONG_DAN_CHAY.md`.
 
 ## Đã xong
@@ -20,13 +20,13 @@ Nhật ký cuối file 01 và 02; số liệu cho báo cáo ở `SO_LIEU_DU_LIEU
 
 ## Việc tiếp theo (theo thứ tự)
 
-1. Nhánh B (user chạy, sau khi push): `notebooks/uemr/uemr_final_benchmark.ipynb` B1 / B2, bản gộp 2026-11-13 (`FUSHION_REF = c7e020e`: kho =
-   mọi video YouCook2 có mp4, ~1.500; annotation từ repo; đầu ra `/content` + HF `GraceFeel/uemr-bench-yc2`; **cả pipeline + chấm một lần**).
-   Chưa có log. Gửi output ô 3 đến 10.
-2. Agent: đọc log, tải `results/` từ HF `GraceFeel/uemr-bench-yc2` (`yc2/results/`), ghi Nhật ký file 03, commit `benchmark_protocol.json` và
-   `results/uemr_final/bench/yc2/`.
-3. File 04: bản chưa có benchmark đã viết 2026-11-14 ở `D:/Học/KL/Result/uemr_final/KET_QUA_UEMR.md`. Khi có benchmark: điền mục 7, câu
-   kết luận ở mục 1, ý 2 của mục 10 (K4 / K5), sha256 protocol ở mục 12, ví dụ định tính ở mục 9.
+1. **Benchmark YouCook2 xong (2026-11-20, user chốt hướng a):** kết quả chính = lượt đủ kho 1.500 video, 11.590 câu, protocol `1c2ea146…`:
+   K1, K2, K3 đạt; K4, K5 không đạt. Phương án B (635 video) chỉ còn là tham chiếu. Chi tiết: Nhật ký file 03 mục 2026-11-20,
+   `results/uemr_final/bench/yc2/score_print.txt`.
+2. Còn thiếu: `pairs.json` / `metrics.json` / `criteria.json` / `benchmark_protocol.json` từ HF `GraceFeel/uemr-bench-yc2` (`yc2/results/`)
+   (token HF local 401). Có rồi thì commit vào `results/uemr_final/bench/yc2/` và điền dòng 1–3 bảng cặp của paper.
+3. Cập nhật theo kết quả chính: paper `Report/Bao/UEMR/SSRC_template/htstep_paper.tex` §V; `D:/Học/KL/Result/uemr_final/KET_QUA_UEMR.md`
+   (mục 1, 7, 10 ý 2, 12; mục 9 ví dụ định tính); báo cáo Word (`Report/scripts/uemr_chot_docx/body.txt`, các TODO benchmark).
 
 ## Lưu ý cho phiên sau
 

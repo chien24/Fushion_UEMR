@@ -1,4 +1,4 @@
-# Output user chạy trên Colab 2026-11-15 (đọc yc2/results/score/metrics.json + pairs.json từ HF GraceFeel/uemr-bench-yc2, protocol 8b00211b), multi-positive
+# PHƯƠNG ÁN B (635 video, 4.967 câu), KHÔNG còn là kết quả chính từ 2026-11-20 (xem score_print.txt). Output user chạy trên Colab 2026-11-15 (đọc yc2/results/score/metrics.json + pairs.json từ HF GraceFeel/uemr-bench-yc2, protocol 8b00211b), multi-positive
 dòng  cột   R@1   R@5  R@10  MedR  VCMR R@1  vec/video  video có vector
   R0    b  6.56 20.54 30.92  30.0      0.02       1.00              635
   R0    S  5.05 15.40 25.77  35.0      0.04       1.00              635

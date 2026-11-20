@@ -234,3 +234,37 @@ R7 − UEMR R8 +3,66 [+2,60; +4,79]; pt − best R0 (b) +0,60 [−0,35; +1,48]; 
 Kết luận theo §8 (K1 và K2 đạt): "UEMR có tác dụng zero-shot trên YouCook2, cả so với một vector lẫn so với cắt đều".
 Bảng R@1 tuyệt đối của từng dòng × cột chỉ có trong `results/score/metrics.json` trên HF (log in dạng widget); token HF ở local không
 đọc được repo private nên chưa tải về `results/uemr_final/bench/yc2/`.
+
+### 2026-11-20: lượt đủ kho 1.500 video, **kết quả chính** (user chốt hướng a; agent đọc output trong `notebooks/uemr/uemr_final_benchmark.ipynb` do user tải về)
+
+**Chạy trên:** A100-SXM4-40GB, `"smoke": false`, notebook theo commit `54c55d6` (code `FUSHION_REF = c7e020e`). Đặc trưng K400 + BEATs đã có
+đủ trên HF cho **1.500 / 1.500 video** (`failed` rỗng, không video nào tiếng toàn 0), nên ô 5b giữ nguyên kho, không lọc câu nào. Mọi CHECK
+OK: unit test 33 pass; adapter `best` `5e9899aa…`, pt `31e81f1c…`; annotation repo = bản chính thức (1.790 video); config `c9840ffb…`;
+checkpoint UniAV `9447de87…`; taxonomy; UniAV chạy đủ 1.500 video; đổi bước giữ chỗ (cùng GPU) OK; Omni `best` 105.440 clip, pt 43.721
+clip, 0 lỗi (0,245 s/clip); không clip nào thiếu vector Omni.
+
+**Kho và câu hỏi:** 1.500 video (sha `82d2301b…`), 11.590 câu (sha `3131672b…`, bỏ 4 bước không còn cửa sổ trong mp4), 892 câu có text trùng
+ở ≥ 2 video. Protocol **`1c2ea14654e74d9c8a7d76163f1ed914ad0be62a1466f2f5569530460f3ec9a8`**, khoá ở ô 7 trước khi chấm, ô 9 kiểm khớp.
+
+**Đoạn (θ 0,402, L_min 5, L_fill 10, L của R2 11,34 s):** R0 1.500, R2 42.227, R3 8.088, R6 8.088, R8 42.221, R7 11.590 clip; UniAV
+`uniav_raw` sha `8ad2b2db…`. Chất lượng cắt (chỉ mô tả): recall tIoU 0,3 / 0,5 / 0,7 = 38,46 / 25,80 / 14,37; bỏ sót 61,54 %; độ phủ R6
+27,68 %, R8 98,75 %; K_pred 5,39, K_GT 7,73 đoạn / video; 0 video không có đoạn R6; 266 article đoán khác nhau.
+
+**Tiêu chí (multi-positive, R@1, hiệu [CI 95 %]):** K1 +4,88 [+4,21; +5,53] đạt; K2 +3,71 [+3,04; +4,33] đạt; K3 +1,79 [+1,40; +2,19] đạt;
+**K4 +0,31 [−0,21; +0,81] không đạt**; K5 −2,17 [−2,74; −1,59] không đạt. K6: UEMR R8 − R2 +0,48 [−0,01; +1,00]; C1 R8 − R6 (b) +0,09
+[−0,25; +0,42]; R7 − UEMR R8 +2,57 [+2,01; +3,17]; pt − best R0 (b) 0,00 [−0,47; +0,47]; pt − best R8 (b) +0,03 [−0,75; +0,79].
+Kết luận theo §8 (K1 và K2 đạt): **"UEMR có tác dụng zero-shot trên YouCook2, cả so với một vector lẫn so với cắt đều"**. R@1 tuyệt đối:
+R0 (b) 3,76; R8 (b) 10,82; R8 UEMR 8,65; R8 (S) 4,07; R7 (b) 14,46. Bảng đủ (multi, strict): `results/uemr_final/bench/yc2/score_print.txt`.
+
+**Khác plan (ghi để báo cáo nêu rõ):** `run_manifest` đếm **3 lượt chấm** trên YouCook2: (1) 2026-11-15 câu hỏi lệch kho (đã cất);
+(2) phương án B, kho 635 video, protocol `8b00211b…` (K1–K4 đạt; nay chỉ là tham chiếu, bảng ở
+`results/uemr_final/bench/yc2/phuong_an_B_635_score_multi_print.txt`); (3) lượt này. Ô 5b không in "đã cất", tức `results/score` và protocol của
+phương án B đã được xoá khỏi HF trước lượt này (ngoài notebook). Không đổi tham số nào của `configs/uemr_final.json` giữa ba lượt; số của
+lượt 1 và 2 đã được nhìn thấy trước lượt 3. **Lý do chọn lượt 3 (user, 2026-11-20):** đúng kho của plan (mọi video có mp4), không còn giới
+hạn "635 / 1.500 chọn theo tên ID". Hệ quả: K4 đạt ở phương án B (cận dưới +0,08, sát 0) không còn đạt trên đủ kho.
+
+**Đọc số (agent, chưa kiểm bằng phân tích riêng):** (S) gần (b) trên dev HT-Step (R8: 58,56 so với 59,60) nhưng chỉ còn 4,07 so với 10,82
+trên YouCook2: vector chưng cất `h_i` không chuyển miền tốt, nên K4 không đạt và cộng (S) vào (b) (β = 1) kéo xuống (K5).
+
+**Còn thiếu:** `pairs.json`, `metrics.json`, `criteria.json`, `benchmark_protocol.json` chưa tải về repo (token HF local 401); các cặp ngoài
+K1–K6 (R8 − R0 (b), R8 − R3 (b), R8 − R2 (b), R6 − R0, R6 − R3, R6 − R1, R7 − R8 (b)) chưa có số.
