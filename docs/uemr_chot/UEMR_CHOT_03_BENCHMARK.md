@@ -266,5 +266,9 @@ hạn "635 / 1.500 chọn theo tên ID". Hệ quả: K4 đạt ở phương án 
 **Đọc số (agent, chưa kiểm bằng phân tích riêng):** (S) gần (b) trên dev HT-Step (R8: 58,56 so với 59,60) nhưng chỉ còn 4,07 so với 10,82
 trên YouCook2: vector chưng cất `h_i` không chuyển miền tốt, nên K4 không đạt và cộng (S) vào (b) (β = 1) kéo xuống (K5).
 
-**Còn thiếu:** `pairs.json`, `metrics.json`, `criteria.json`, `benchmark_protocol.json` chưa tải về repo (token HF local 401); các cặp ngoài
-K1–K6 (R8 − R0 (b), R8 − R3 (b), R8 − R2 (b), R6 − R0, R6 − R3, R6 − R1, R7 − R8 (b)) chưa có số.
+**Mọi cặp (multi, `pairs.json`, user in từ HF trên Colab 2026-11-20):** R8 − R0 (b) +7,06 [+6,35; +7,75]; R6 − R0 (b) +3,27 [+2,64; +3,91];
+R8 − R3 (b) +4,98 [+4,28; +5,71]; R6 − R3 (b) +1,19 [+0,59; +1,74]; R8 − R2 (b) +0,15 [−0,45; +0,73]; R6 − R1 (b) +3,10 [+2,58; +3,69];
+R7 − R8 (b) +3,64 [+2,88; +4,47]. Strict cho cùng kết luận (CI có chứa 0 hay không) ở mọi cặp (K4 strict +0,41 [−0,10; +0,96], vẫn không đạt). Đủ ở `score_print.txt`.
+
+**Còn thiếu:** file `metrics.json`, `criteria.json`, `pairs.json`, `benchmark_protocol.json` chưa tải về repo (token HF local 401); số đã chép
+tay từ output vào `score_print.txt`.

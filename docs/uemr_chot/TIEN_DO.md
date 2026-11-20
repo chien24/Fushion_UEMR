@@ -23,8 +23,8 @@ Nhật ký cuối file 01 và 02; số liệu cho báo cáo ở `SO_LIEU_DU_LIEU
 1. **Benchmark YouCook2 xong (2026-11-20, user chốt hướng a):** kết quả chính = lượt đủ kho 1.500 video, 11.590 câu, protocol `1c2ea146…`:
    K1, K2, K3 đạt; K4, K5 không đạt. Phương án B (635 video) chỉ còn là tham chiếu. Chi tiết: Nhật ký file 03 mục 2026-11-20,
    `results/uemr_final/bench/yc2/score_print.txt`.
-2. Còn thiếu: `pairs.json` / `metrics.json` / `criteria.json` / `benchmark_protocol.json` từ HF `GraceFeel/uemr-bench-yc2` (`yc2/results/`)
-   (token HF local 401). Có rồi thì commit vào `results/uemr_final/bench/yc2/` và điền dòng 1–3 bảng cặp của paper.
+2. Mọi cặp CI đã có (user in từ HF, chép vào `score_print.txt`). Các file json gốc (`pairs`, `metrics`, `criteria`, `benchmark_protocol`)
+   chưa tải về repo (token HF local 401). Dòng 1–3 bảng cặp của paper còn `??` (user: viết file md trước).
 3. Cập nhật theo kết quả chính: paper `Report/Bao/UEMR/SSRC_template/htstep_paper.tex` §V; `D:/Học/KL/Result/uemr_final/KET_QUA_UEMR.md`
    (mục 1, 7, 10 ý 2, 12; mục 9 ví dụ định tính); báo cáo Word (`Report/scripts/uemr_chot_docx/body.txt`, các TODO benchmark).
 
