@@ -12,6 +12,15 @@ def test_miss_r6():
     assert np.allclose(best, [1.0, 0.0, 0.0])
 
 
+def test_recipe_rules():
+    from uemr_htstep import recipe_yc2 as ry
+    assert ry.same_top1({"a": {"article_top1": 1}, "b": {"article_top1": 2}}, {"a": {"article_top1": 1}, "b": {"article_top1": 3}}) == ["b"]
+    assert ry.same_top1({"a": {"article_top1": 1}}, {"a": {"article_top1": 1}, "b": {"article_top1": 3}}) == ["b"]
+    g = ry.terciles({str(i): i / 10 for i in range(9)})
+    assert [g[str(i)] for i in range(9)] == ["thấp"] * 3 + ["giữa"] * 3 + ["cao"] * 3
+    assert ry.supported({"thấp": -3.0, "giữa": -2.0, "cao": 0.5}) and not ry.supported({"thấp": -1.0, "giữa": -2.0, "cao": 0.5})
+
+
 def test_pick_kinds():
     rk = {("U", "R8"): np.array([1, 1, 200, 1]), ("U", "R6"): np.array([1, 3, 300, 1]), ("b", "R0"): np.array([50, 2, 400, 1])}
     got = bc.pick(rk, np.array([0, 0, 0, 1]), np.array([0.9, 0.1, 0.0, 0.8]), np.random.default_rng(0))

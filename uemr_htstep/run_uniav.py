@@ -68,6 +68,18 @@ def cmd_proposals(a, model, ds, uh) -> None:
     print(f"{RAW}: {len(done) + len(todo)} videos, sha256 {sha256(path)}")
 
 
+def cmd_recipe(a, model, ds, uh) -> None:
+    """``DIR/recipe.jsonl``: recipe top-1 and its softmax probability per video, main mode (analysis ``recipe_yc2``)."""
+    row_of = {x["id"]: i for i, x in enumerate(ds.data_list)}
+    videos = [v.strip() for v in open(a.videos, encoding="utf-8") if v.strip()]
+    os.makedirs(a.out, exist_ok=True)
+    with open(os.path.join(a.out, "recipe.jsonl"), "w", encoding="utf-8", newline="\n") as f:
+        for v in videos:
+            p = uh.predict(model, ds[row_of[v]], "pred")
+            f.write(json.dumps({"video_id": v, "article_top1": p["article_top1"], "p_top1": p["article_p1"]}) + "\n")
+    print(f"recipe.jsonl: {len(videos)} videos")
+
+
 def write_csv(rows: list[dict], key: str, path: str) -> None:
     """The official HT-Step prediction format (``train_utils.write_predictions_csv``)."""
     with open(path, "w", encoding="utf-8", newline="\n") as f:
@@ -252,6 +264,7 @@ def main() -> None:
     st.add_argument("--article", choices=("pred", "gt", "rand"), default="pred")
     st.add_argument("--rand-seed", type=int, default=0)
     sub.add_parser("feats", parents=[common, model_args])
+    sub.add_parser("recipe", parents=[common, model_args])
     om = sub.add_parser("omni", parents=[common, model_args])
     om.add_argument("--train-teacher", required=True, help="<teacher set>/train: the mean removed by OmniCosC")
     om.add_argument("--cand-check", type=int, default=20)
@@ -263,7 +276,8 @@ def main() -> None:
         return
     from uemr_htstep import uniav_htstep as uh
     model, ds = uh.load(a.uniav_repo, a.ckpt, a.annotations, a.taxonomy, a.step_emb, a.feat_dir, a.omni_dir, a.device)
-    {"proposals": cmd_proposals, "student": cmd_student, "feats": cmd_feats, "omni": cmd_omni}[a.cmd](a, model, ds, uh)
+    {"proposals": cmd_proposals, "student": cmd_student, "feats": cmd_feats, "omni": cmd_omni,
+     "recipe": cmd_recipe}[a.cmd](a, model, ds, uh)
 
 
 if __name__ == "__main__":

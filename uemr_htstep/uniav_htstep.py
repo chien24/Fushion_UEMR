@@ -54,6 +54,7 @@ def predict(model, video: dict, mode: str = "pred", article: int | None = None) 
 
     def on_article_head(_module, _inputs, logits):
         top1["i"] = int(logits[0].argmax())
+        top1["p"] = float(logits[0].float().softmax(-1).max())
         if article is not None:
             x["cand"] = torch.as_tensor(model.article_steps[int(article)], device=logits.device)
         elif mode == "pred":
@@ -66,7 +67,7 @@ def predict(model, video: dict, mode: str = "pred", article: int | None = None) 
     finally:
         for h in hooks:
             h.remove()
-    return {**out, "article_top1": top1["i"], "feat0": feat0["f"], "feat_stride": video["feat_stride"],
+    return {**out, "article_top1": top1["i"], "article_p1": top1["p"], "feat0": feat0["f"], "feat_stride": video["feat_stride"],
             "fps": video["fps"]}
 
 
